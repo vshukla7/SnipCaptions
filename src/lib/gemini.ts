@@ -1,7 +1,7 @@
 import { GoogleGenAI, type GenerateContentConfig, type Part } from "@google/genai";
 import type { TranscriptionResult, Word } from "./types";
 
-export const GEMINI_MODEL = "Gemini 3.5 Flash-Lite";
+export const GEMINI_MODEL = "gemini-2.5-flash-lite";
 
 const TRANSCRIPTION_SCHEMA = {
   type: "OBJECT",
@@ -72,7 +72,7 @@ export async function transcribeVideo({
   const ai = new GoogleGenAI({ apiKey });
 
   onStatus?.("Uploading media to Gemini…");
-  console.log("[SnipCaptions:gemini] uploading file:", file.name, file.type, file.size);
+  console.log("[SnipCaptions:gemini] uploading file:", file.name, file.type, file.size, "· model=", GEMINI_MODEL);
   const uploaded = await ai.files.upload({ file });
   console.log("[SnipCaptions:gemini] uploaded →", uploaded.uri, uploaded.mimeType);
 
