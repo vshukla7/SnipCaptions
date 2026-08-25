@@ -36,11 +36,16 @@ export function AdBanner({
 export function AdInterstitial({
   open,
   title,
+  progress,
+  words,
 }: {
   open: boolean;
   title?: string;
+  progress?: number;
+  words?: number;
 }) {
   if (!open) return null;
+  const pct = Math.round((progress ?? 0) * 100);
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
       <div className="flex h-[70vh] w-[90vw] max-w-3xl flex-col items-center justify-center gap-4 rounded-2xl border border-[var(--border)] bg-[var(--editor-panel)] p-6">
@@ -49,12 +54,22 @@ export function AdInterstitial({
             Interstitial Advertisement · 300×600
           </span>
         </div>
-        {title ? (
-          <p className="text-sm text-[var(--editor-text-muted)]">{title}</p>
+        {typeof progress === "number" ? (
+          <div className="w-full max-w-md">
+            <div className="mb-1 flex items-center justify-between text-xs text-[var(--editor-text-muted)]">
+              <span>{title ?? "Generating captions…"}</span>
+              <span>
+                {pct}%{words ? ` · ${words} words` : ""}
+              </span>
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-[var(--editor-card)]">
+              <div
+                className="h-full rounded-full bg-[var(--brand-blue)] transition-all"
+                style={{ width: `${pct}%` }}
+              />
+            </div>
+          </div>
         ) : null}
-        <span className="text-xs text-[var(--editor-text-muted)] opacity-60">
-          Your video is being processed…
-        </span>
       </div>
     </div>
   );

@@ -40,6 +40,7 @@ interface AppContextValue {
   status: AppStatus;
   statusMessage: string;
   progress: number;
+  wordsSoFar: number;
   error: string | null;
 
   transcribe: () => Promise<void>;
@@ -66,6 +67,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AppStatus>("idle");
   const [statusMessage, setStatusMessage] = useState("");
   const [progress, setProgress] = useState(0);
+  const [wordsSoFar, setWordsSoFar] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [durationInSeconds, setDurationInSeconds] = useState(0);
   const urlRef = useRef<string | null>(null);
@@ -128,16 +130,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     setError(null);
     setStatus("transcribing");
-    setProgress(0.1);
+    setProgress(0);
+    setWordsSoFar(0);
     setStatusMessage("Starting transcription…");
     try {
       const result = await transcribeVideo({
         apiKey,
         file: videoFile,
         language,
+        durationSeconds: durationInSeconds,
         onStatus: (m) => setStatusMessage(m),
+        onProgress: (p) => {
+          setProgress(p.progress);
+          setWordsSoFar(p.words);
+        },
       });
       setTranscription(result);
+      setWordsSoFar(result.words.length);
       setProgress(1);
       setStatus("ready");
       setStatusMessage("Transcription complete");
@@ -146,7 +155,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setError(e instanceof Error ? e.message : "Transcription failed");
       setStatusMessage("");
     }
-  }, [videoFile, apiKey, language]);
+  }, [videoFile, apiKey, language, durationInSeconds]);
 
   const reset = useCallback(() => {
     setVideo(null);
@@ -176,6 +185,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     status,
     statusMessage,
     progress,
+    wordsSoFar,
     error,
     transcribe,
     reset,

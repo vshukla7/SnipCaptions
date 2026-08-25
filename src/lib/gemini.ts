@@ -1,7 +1,7 @@
 import { GoogleGenAI, type GenerateContentConfig, type Part } from "@google/genai";
 import type { TranscriptionResult, Word } from "./types";
 
-export const GEMINI_MODEL = "gemini-2.5-flash";
+export const GEMINI_MODEL = "Gemini 3.5 Flash-Lite";
 
 const TRANSCRIPTION_SCHEMA = {
   type: "OBJECT",
@@ -52,15 +52,19 @@ export interface TranscribeOptions {
   apiKey: string;
   file: File;
   language: string;
+  durationSeconds?: number;
   signal?: AbortSignal;
   onStatus?: (msg: string) => void;
+  onProgress?: (p: { progress: number; words: number }) => void;
 }
 
 export async function transcribeVideo({
   apiKey,
   file,
   language,
+  durationSeconds,
   onStatus,
+  onProgress,
 }: TranscribeOptions): Promise<TranscriptionResult> {
   const ai = new GoogleGenAI({ apiKey });
 
@@ -85,14 +89,26 @@ export async function transcribeVideo({
     };
 
     onStatus?.("Transcribing audio with Gemini…");
-    const res = await ai.models.generateContent({
+    // Stream the response so we can show real, incremental progress.
+    const estimatedTotal = Math.max(1, Math.round((durationSeconds ?? 30) * 2.5));
+    let acc = "";
+    const stream = await ai.models.generateContentStream({
       model: GEMINI_MODEL,
       contents: [{ parts }],
       config,
     });
 
-    const raw = res.text ?? "{}";
-    const parsed = JSON.parse(raw) as {
+    for await (const chunk of stream) {
+      acc += chunk.text ?? "";
+      const words = (acc.match(/"word"/g) ?? []).length;
+      onProgress?.({
+        progress: Math.min(0.95, words / estimatedTotal),
+        words,
+      });
+    }
+
+    const clean = acc.replace(/```json|```/gi, "").trim();
+    const parsed = JSON.parse(clean || "{}") as {
       language?: string;
       text?: string;
       words?: Word[];
@@ -103,6 +119,8 @@ export async function transcribeVideo({
         "Gemini returned no words. Try a clearer audio clip or a different language.",
       );
     }
+
+    onProgress?.({ progress: 1, words: parsed.words.length });
 
     return {
       language: parsed.language ?? language,
