@@ -50,7 +50,9 @@ export function Studio() {
     setProgress(0);
     setStatusMessage("Rendering video in your browser…");
     try {
+      console.log("[SnipCaptions:studio] export start · theme=", captionTheme, "durFrames=", durationInFrames, "size=", aspect.w + "x" + aspect.h, "words=", words.length, "src=", videoUrl);
       const { renderMediaOnWeb } = await import("@remotion/web-renderer");
+      console.log("[SnipCaptions:studio] @remotion/web-renderer imported");
       const controller = new AbortController();
 
       const { getBlob } = await renderMediaOnWeb({
@@ -75,11 +77,16 @@ export function Studio() {
         onProgress: (p: unknown) => {
           const value =
             typeof p === "number" ? p : (p as { progress?: number })?.progress ?? 0;
+          if (Math.round(value * 100) % 10 === 0) {
+            console.log("[SnipCaptions:studio] render progress=", (value * 100).toFixed(0) + "%");
+          }
           setProgress(value);
         },
       });
+      console.log("[SnipCaptions:studio] renderMediaOnWeb returned, fetching blob…");
 
       const blob = await getBlob();
+      console.log("[SnipCaptions:studio] blob ready · size=", (blob.size / 1024 / 1024).toFixed(2) + "MB", "type=", blob.type);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -95,8 +102,9 @@ export function Studio() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ eventType: "VIDEO_EXPORT" }),
-      }).catch(() => {});
+      }).then(() => console.log("[SnipCaptions:studio] /api/track export event sent")).catch(() => {});
     } catch (e) {
+      console.error("[SnipCaptions:studio] export error", e);
       setStatusMessage(
         e instanceof Error ? e.message : "Export failed in this browser.",
       );

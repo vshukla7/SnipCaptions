@@ -37,13 +37,16 @@ Requirements:
 
 export async function validateApiKey(apiKey: string): Promise<boolean> {
   try {
+    console.log("[SnipCaptions:gemini] validateApiKey → calling Gemini");
     const ai = new GoogleGenAI({ apiKey });
     const res = await ai.models.generateContent({
       model: GEMINI_MODEL,
       contents: "Reply with exactly the single word: ok",
     });
+    console.log("[SnipCaptions:gemini] validateApiKey →", res.text);
     return Boolean(res.text && res.text.trim().toLowerCase().startsWith("ok"));
-  } catch {
+  } catch (e) {
+    console.error("[SnipCaptions:gemini] validateApiKey error", e);
     return false;
   }
 }
@@ -69,7 +72,9 @@ export async function transcribeVideo({
   const ai = new GoogleGenAI({ apiKey });
 
   onStatus?.("Uploading media to Gemini…");
+  console.log("[SnipCaptions:gemini] uploading file:", file.name, file.type, file.size);
   const uploaded = await ai.files.upload({ file });
+  console.log("[SnipCaptions:gemini] uploaded →", uploaded.uri, uploaded.mimeType);
 
   try {
     const parts: Part[] = [
@@ -89,9 +94,11 @@ export async function transcribeVideo({
     };
 
     onStatus?.("Transcribing audio with Gemini…");
+    console.log("[SnipCaptions:gemini] starting stream · language=", language, "estimatedTotal based on", durationSeconds, "s");
     // Stream the response so we can show real, incremental progress.
     const estimatedTotal = Math.max(1, Math.round((durationSeconds ?? 30) * 2.5));
     let acc = "";
+    let lastWordCount = 0;
     const stream = await ai.models.generateContentStream({
       model: GEMINI_MODEL,
       contents: [{ parts }],
@@ -101,6 +108,10 @@ export async function transcribeVideo({
     for await (const chunk of stream) {
       acc += chunk.text ?? "";
       const words = (acc.match(/"word"/g) ?? []).length;
+      if (words !== lastWordCount) {
+        lastWordCount = words;
+        console.log("[SnipCaptions:gemini] stream progress · words=", words, "progress=", Math.min(0.95, words / estimatedTotal).toFixed(2));
+      }
       onProgress?.({
         progress: Math.min(0.95, words / estimatedTotal),
         words,
@@ -108,11 +119,13 @@ export async function transcribeVideo({
     }
 
     const clean = acc.replace(/```json|```/gi, "").trim();
+    console.log("[SnipCaptions:gemini] stream complete · raw length=", acc.length);
     const parsed = JSON.parse(clean || "{}") as {
       language?: string;
       text?: string;
       words?: Word[];
     };
+    console.log("[SnipCaptions:gemini] parsed · language=", parsed.language, "wordCount=", parsed.words?.length);
 
     if (!parsed.words || parsed.words.length === 0) {
       throw new Error(

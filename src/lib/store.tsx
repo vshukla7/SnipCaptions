@@ -113,21 +113,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setTranscription(null);
     setStatus("idle");
     setError(null);
+    console.log("[SnipCaptions:store] video selected ·", f.name, f.type, (f.size / 1024 / 1024).toFixed(1) + "MB", "url=", url);
 
     // Probe duration
     const probe = document.createElement("video");
     probe.preload = "metadata";
     probe.src = url;
     probe.onloadedmetadata = () => {
+      console.log("[SnipCaptions:store] video duration probed =", probe.duration, "s");
       setDurationInSeconds(probe.duration || 0);
     };
   }, []);
 
   const transcribe = useCallback(async () => {
     if (!videoFile || !apiKey) {
+      console.warn("[SnipCaptions:store] transcribe aborted — missing video or apiKey");
       setError("Add your Gemini API key and a video first.");
       return;
     }
+    console.log("[SnipCaptions:store] transcribe start · file=", videoFile.name, "language=", language, "duration=", durationInSeconds, "keyLen=", apiKey.length);
     setError(null);
     setStatus("transcribing");
     setProgress(0);
@@ -145,12 +149,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setWordsSoFar(p.words);
         },
       });
+      console.log("[SnipCaptions:store] transcription success · words=", result.words.length, "language=", result.language);
       setTranscription(result);
       setWordsSoFar(result.words.length);
       setProgress(1);
       setStatus("ready");
       setStatusMessage("Transcription complete");
     } catch (e) {
+      console.error("[SnipCaptions:store] transcription error", e);
       setStatus("error");
       setError(e instanceof Error ? e.message : "Transcription failed");
       setStatusMessage("");

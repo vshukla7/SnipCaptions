@@ -42,7 +42,9 @@ export default function Home() {
 
   const studioRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
+    console.log("[SnipCaptions:page] status changed →", status);
     if (status === "ready" && studioRef.current) {
+      console.log("[SnipCaptions:page] scrolling to Caption Studio");
       studioRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   }, [status]);
