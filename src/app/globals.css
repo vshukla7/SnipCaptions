@@ -1,0 +1,297 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+
+/* ============================================================
+   SnipCaptions — Design System
+   Fonts, brand colors and the 4 editor themes.
+   ============================================================ */
+
+/* --- Brand / accent colors (constant across themes) --- */
+:root {
+  --brand-blue: #007aff;
+  --brand-blue-2: #3b82f6;
+  --brand-orange: #f97316;
+  --destructive: #ef4444;
+  --destructive-2: #ff3b30;
+  --success: #30d158;
+  --overlay-pink: #ff2d55;
+  --audio-green: #30d158;
+  --text-amber: #ff9f0a;
+  --shape-purple: #af52de;
+
+  /* Font stacks (set in <head> via Google Fonts + fontsource) */
+  --font-ui: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, sans-serif;
+  --font-variable: "Geist Variable", "Geist", sans-serif;
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-serif: "Instrument Serif", Georgia, serif;
+  --font-creative: "Outfit", "Poppins", sans-serif;
+}
+
+/* ============================================================
+   THEME: Dark (default) — grey panel aesthetic
+   ============================================================ */
+:root,
+[data-theme="dark"] {
+  --background: #1c1c1e;
+  --foreground: #f5f5f7;
+  --card: #2c2c2e;
+  --primary: #f5f5f7;
+  --secondary: #2c2c2e;
+  --muted: #2c2c2e;
+  --muted-foreground: #a1a1aa;
+  --accent: #3a3a3c;
+  --border: rgba(255, 255, 255, 0.1);
+  --ring: #3b82f6;
+
+  --editor-bg: #1c1c1e;
+  --editor-panel: #232326;
+  --editor-sidebar: #1c1c1e;
+  --editor-header: #1c1c1e;
+  --editor-border: rgba(255, 255, 255, 0.1);
+  --editor-accent: #007aff;
+  --editor-card: #2c2c2e;
+  --editor-text: #f5f5f7;
+  --editor-text-muted: #a1a1aa;
+}
+
+/* ============================================================
+   THEME: Light — Apple warm greys
+   ============================================================ */
+[data-theme="light"] {
+  --background: #f5f5f7;
+  --foreground: #1d1d1f;
+  --card: #ffffff;
+  --primary: #1d1d1f;
+  --secondary: #e8e8ed;
+  --muted: #e8e8ed;
+  --muted-foreground: #6e6e73;
+  --accent: #e8e8ed;
+  --border: #d2d2d7;
+  --ring: #1d1d1f;
+
+  --editor-bg: #f5f5f7;
+  --editor-panel: #ffffff;
+  --editor-sidebar: #f5f5f7;
+  --editor-header: #f5f5f7;
+  --editor-border: #d2d2d7;
+  --editor-accent: #007aff;
+  --editor-card: #ffffff;
+  --editor-text: #1d1d1f;
+  --editor-text-muted: #6e6e73;
+}
+
+/* ============================================================
+   THEME: Midnight — pure black for landing pages
+   ============================================================ */
+[data-theme="midnight"] {
+  --background: #0b0b0b;
+  --foreground: #f5f5f7;
+  --card: #161617;
+  --primary: #f5f5f7;
+  --secondary: #1a1a1c;
+  --muted: #1a1a1c;
+  --muted-foreground: #8e8e93;
+  --accent: #242427;
+  --border: rgba(255, 255, 255, 0.08);
+  --ring: #3b82f6;
+
+  --editor-bg: #0b0b0b;
+  --editor-panel: #121214;
+  --editor-sidebar: #0b0b0b;
+  --editor-header: #0b0b0b;
+  --editor-border: rgba(255, 255, 255, 0.08);
+  --editor-accent: #007aff;
+  --editor-card: #161617;
+  --editor-text: #f5f5f7;
+  --editor-text-muted: #8e8e93;
+}
+
+/* ============================================================
+   THEME: PRD v2.0 — #050505 base
+   ============================================================ */
+[data-theme="prd"] {
+  --background: #050505;
+  --foreground: #fafafa;
+  --card: #111111;
+  --primary: #fafafa;
+  --secondary: #18181b;
+  --muted: #18181b;
+  --muted-foreground: #a1a1aa;
+  --accent: #1f1f23;
+  --border: rgba(255, 255, 255, 0.07);
+  --ring: #3b82f6;
+
+  --editor-bg: #050505;
+  --editor-panel: #0c0c0e;
+  --editor-sidebar: #050505;
+  --editor-header: #050505;
+  --editor-border: rgba(255, 255, 255, 0.07);
+  --editor-accent: #007aff;
+  --editor-card: #111111;
+  --editor-text: #fafafa;
+  --editor-text-muted: #a1a1aa;
+}
+
+/* ============================================================
+   Tailwind v4 token mapping (runtime resolution via var())
+   ============================================================ */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+
+  --color-editor-bg: var(--editor-bg);
+  --color-editor-panel: var(--editor-panel);
+  --color-editor-sidebar: var(--editor-sidebar);
+  --color-editor-header: var(--editor-header);
+  --color-editor-border: var(--editor-border);
+  --color-editor-accent: var(--editor-accent);
+  --color-editor-card: var(--editor-card);
+  --color-editor-text: var(--editor-text);
+  --color-editor-text-muted: var(--editor-text-muted);
+
+  --color-brand-blue: var(--brand-blue);
+  --color-brand-blue-2: var(--brand-blue-2);
+  --color-brand-orange: var(--brand-orange);
+  --color-destructive: var(--destructive);
+  --color-destructive-2: var(--destructive-2);
+  --color-success: var(--success);
+  --color-overlay-pink: var(--overlay-pink);
+  --color-audio-green: var(--audio-green);
+  --color-text-amber: var(--text-amber);
+  --color-shape-purple: var(--shape-purple);
+
+  --font-ui: var(--font-ui);
+  --font-variable: var(--font-variable);
+  --font-display: var(--font-display);
+  --font-serif: var(--font-serif);
+  --font-creative: var(--font-creative);
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100vh;
+}
+
+/* Thin, themed scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--accent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+  background-clip: padding-box;
+}
+
+/* Focus ring uses the themed ring color */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+/* Local custom font references (graceful fallback if not installed) */
+@font-face {
+  font-family: "Celosia Nature";
+  src: local("Celosia Nature");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Gilroy ExtraBold";
+  src: local("Gilroy ExtraBold"), local("Gilroy-ExtraBold");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Helvetica Bold";
+  src: local("Helvetica Bold"), local("Helvetica-Bold");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Longmile";
+  src: local("Longmile");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Helvetica Rounded";
+  src: local("Helvetica Rounded"), local("HelveticaRounded");
+  font-display: swap;
+}
+@font-face {
+  font-family: "NCL Gasdrifo Demo";
+  src: local("NCL Gasdrifo Demo");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Qurova Demo Light";
+  src: local("Qurova Demo Light");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Readex Pro Medium";
+  src: local("Readex Pro Medium"), local("ReadexPro-Medium");
+  font-display: swap;
+}
+@font-face {
+  font-family: "Retro Floral";
+  src: local("Retro Floral");
+  font-display: swap;
+}
+
+@keyframes sc-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.sc-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--accent) 25%,
+    var(--editor-border) 50%,
+    var(--accent) 75%
+  );
+  background-size: 200% 100%;
+  animation: sc-shimmer 1.4s infinite;
+}
+
+@keyframes sc-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+.sc-pulse {
+  animation: sc-pulse 1.2s ease-in-out infinite;
+}

@@ -1,0 +1,33 @@
+{
+  "name": "snipcaptions",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@fontsource-variable/geist": "^5.1.0",
+    "@google/genai": "^1.9.0",
+    "@remotion/player": "^4.0.491",
+    "@remotion/web-renderer": "^4.0.491",
+    "framer-motion": "^12.0.0",
+    "mongoose": "^8.9.0",
+    "next": "16.3.3",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "remotion": "^4.0.491"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.3",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
