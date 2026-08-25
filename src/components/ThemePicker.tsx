@@ -28,13 +28,13 @@ export function ThemePicker() {
               style={{ boxShadow: active ? `inset 0 0 0 1px ${t.accent}` : undefined }}
             >
               <span
-                className={cn(t.fontClass, "text-base font-extrabold leading-none")}
+                className={cn(t.fontClass, "text-base font-bold leading-none")}
                 style={{ color: t.accent }}
               >
                 Aa
               </span>
             </div>
-            <p className="text-sm font-semibold text-[var(--editor-text)]">
+            <p className="text-sm font-medium text-[var(--editor-text)]">
               {t.name}
             </p>
             <p className="mt-0.5 text-xs text-[var(--editor-text-muted)]">

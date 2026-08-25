@@ -55,7 +55,7 @@ export function ApiKeyModal({
           >
             <div className="mb-4 flex items-start justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-[var(--editor-text)]">
+                <h2 className="text-lg font-medium text-[var(--editor-text)]">
                   Gemini API Key
                 </h2>
                 <p className="mt-1 text-sm text-[var(--editor-text-muted)]">
@@ -101,7 +101,7 @@ export function ApiKeyModal({
               <button
                 onClick={save}
                 disabled={validating || draft.trim().length === 0}
-                className="rounded-xl bg-[var(--editor-accent)] px-4 py-2 text-sm font-semibold text-white disabled:opacity-40"
+                className="rounded-xl bg-[var(--editor-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
               >
                 {validating ? "Validating…" : "Save Key"}
               </button>

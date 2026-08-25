@@ -35,13 +35,12 @@ export default function Home() {
 
       <main className="mx-auto w-full max-w-6xl flex-1 space-y-8 px-4 py-8">
         <section className="text-center">
-          <h1 className="font-display text-3xl font-extrabold tracking-tight text-[var(--foreground)] sm:text-5xl">
-            Captions that convert.
-            <span className="text-[var(--brand-blue)]"> In your browser.</span>
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-5xl">
+            AI Captions
+            <span className="text-[var(--brand-blue)]"> 100% Free</span>
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-[var(--muted-foreground)]">
-            Upload a clip, bring your own Gemini API key, and export watermark-free
-            1080p captions with Neon, Kinetic, Clean &amp; Word-by-Word themes.
+           Auto-Captions That Don't Suck. 100% Free. Full HD. Unlimited.
           </p>
         </section>
 
@@ -54,7 +53,7 @@ export default function Home() {
             <button
               onClick={transcribe}
               disabled={!canGenerate}
-              className="w-full rounded-xl bg-[var(--brand-blue)] px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+              className="w-full rounded-xl bg-[var(--brand-blue)] px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             >
               {status === "transcribing"
                 ? "Transcribing…"
@@ -89,7 +88,7 @@ export default function Home() {
         {transcription ? (
           <section className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-[var(--foreground)]">
+              <h2 className="text-lg font-medium text-[var(--foreground)]">
                 Caption Studio
               </h2>
               <span className="rounded-full bg-[var(--editor-card)] px-3 py-1 text-xs text-[var(--editor-text-muted)]">
@@ -102,10 +101,6 @@ export default function Home() {
       </main>
 
       <AdBanner variant="footer" />
-
-      <footer className="border-t border-[var(--border)] py-6 text-center text-xs text-[var(--muted-foreground)]">
-        SnipCaptions · Client-side processing · Your files never leave your device.
-      </footer>
     </div>
   );
 }

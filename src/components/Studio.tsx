@@ -163,7 +163,7 @@ export function Studio() {
       {/* Controls */}
       <div className="space-y-5">
         <div>
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-[var(--editor-text-muted)]">
+          <h3 className="mb-3 text-sm font-medium uppercase tracking-wide text-[var(--editor-text-muted)]">
             Caption Theme
           </h3>
           <ThemePicker />
@@ -174,7 +174,7 @@ export function Studio() {
             type="button"
             onClick={handleExport}
             disabled={!ready || exporting}
-            className="w-full rounded-xl bg-[var(--brand-orange)] px-4 py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40"
+            className="w-full rounded-xl bg-[var(--brand-orange)] px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
           >
             {exporting
               ? `Exporting… ${Math.round(progress * 100)}%`

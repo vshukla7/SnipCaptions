@@ -67,19 +67,6 @@ export const CAPTION_THEMES: CaptionThemeMeta[] = [
   },
 ];
 
-export interface EditorThemeMeta {
-  id: string;
-  name: string;
-  swatch: string;
-}
-
-export const EDITOR_THEMES: EditorThemeMeta[] = [
-  { id: "dark", name: "Dark", swatch: "#1c1c1e" },
-  { id: "light", name: "Light", swatch: "#f5f5f7" },
-  { id: "midnight", name: "Midnight", swatch: "#0b0b0b" },
-  { id: "prd", name: "PRD v2.0", swatch: "#050505" },
-];
-
 export const LANGUAGES: { code: string; label: string }[] = [
   { code: "en", label: "English" },
   { code: "hi", label: "Hinglish / Hindi" },

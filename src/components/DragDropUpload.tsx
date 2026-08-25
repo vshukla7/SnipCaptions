@@ -46,7 +46,7 @@ export function DragDropUpload() {
         <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--editor-card)] text-2xl">
           ⬆
         </div>
-        <p className="text-base font-semibold text-[var(--editor-text)]">
+        <p className="text-base font-medium text-[var(--editor-text)]">
           Drag &amp; drop your video here
         </p>
         <p className="mt-1 text-sm text-[var(--editor-text-muted)]">
