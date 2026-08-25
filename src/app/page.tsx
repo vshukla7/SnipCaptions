@@ -7,6 +7,21 @@ import { Studio } from "@/components/Studio";
 import { AdBanner, AdInterstitial } from "@/components/Ads";
 import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { motion, type Variants } from "framer-motion";
+
+const container: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.12, delayChildren: 0.05 } },
+};
+
+const item: Variants = {
+  hidden: { opacity: 0, y: 16 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, ease: "easeOut" },
+  },
+};
 
 export default function Home() {
   const {
@@ -33,8 +48,13 @@ export default function Home() {
 
       <AdBanner variant="header" />
 
-      <main className="mx-auto w-full max-w-6xl flex-1 space-y-8 px-4 py-8">
-        <section className="text-center">
+      <motion.main
+        variants={container}
+        initial="hidden"
+        animate="show"
+        className="mx-auto w-full max-w-6xl flex-1 space-y-8 px-4 py-8"
+      >
+        <motion.section variants={item} className="text-center">
           <h1 className="font-display text-3xl font-semibold tracking-tight text-[var(--foreground)] sm:text-5xl">
             AI Captions
             <span className="text-[var(--brand-blue)]"> 100% Free</span>
@@ -42,9 +62,9 @@ export default function Home() {
           <p className="mx-auto mt-3 max-w-2xl text-[var(--muted-foreground)]">
            Auto-Captions That Don't Suck. 100% Free. Full HD. Unlimited.
           </p>
-        </section>
+        </motion.section>
 
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <motion.section variants={item} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="rounded-2xl border border-[var(--border)] bg-[var(--card)] p-5">
             <DragDropUpload />
           </div>
@@ -70,7 +90,7 @@ export default function Home() {
               </p>
             ) : null}
           </div>
-        </section>
+        </motion.section>
 
         {(statusMessage || error) && (
           <div
@@ -86,7 +106,12 @@ export default function Home() {
         )}
 
         {transcription ? (
-          <section className="space-y-3">
+          <motion.section
+            variants={item}
+            initial="hidden"
+            animate="show"
+            className="space-y-3"
+          >
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-medium text-[var(--foreground)]">
                 Caption Studio
@@ -96,9 +121,9 @@ export default function Home() {
               </span>
             </div>
             <Studio />
-          </section>
+          </motion.section>
         ) : null}
-      </main>
+      </motion.main>
 
       <AdBanner variant="footer" />
     </div>

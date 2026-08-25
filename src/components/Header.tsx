@@ -16,8 +16,9 @@ export function Header() {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="leading-tight">
-            <p className="text-sm font-semibold text-[var(--editor-text)]">
-              SnipCaptions
+            <p className="text-sm text-[var(--editor-text)]">
+              <span className="font-normal">Snip</span>
+              <span className="font-bold">Captions</span>
             </p>
           </div>
         </div>
@@ -36,7 +37,7 @@ export function Header() {
           <button
             onClick={() => setModalOpen(true)}
             className={cn(
-              "rounded-xl border px-4 py-2 text-sm font-semibold transition-colors",
+              "rounded-xl border px-4 py-2 text-sm font-medium transition-colors",
               hasApiKey
                 ? "border-[var(--success)] text-[var(--success)]"
                 : "border-[var(--border)] text-[var(--editor-text)] hover:border-[var(--editor-accent)]",
