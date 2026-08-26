@@ -209,7 +209,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } catch (e) {
       console.error("[SnipCaptions:store] transcription error", e);
       setStatus("error");
-      setError(e instanceof Error ? e.message : "Transcription failed");
+      
+      const rawMessage = e instanceof Error ? e.message : String(e);
+      const lower = rawMessage.toLowerCase();
+      let friendlyError = rawMessage;
+
+      if (
+        lower.includes("api key") ||
+        lower.includes("apikey") ||
+        lower.includes("api_key") ||
+        lower.includes("key is invalid") ||
+        lower.includes("invalid key")
+      ) {
+        friendlyError = "Invalid Gemini API Key. Please verify your API key in the top-right settings and try again.";
+      } else if (lower.includes("returned no words")) {
+        friendlyError = rawMessage;
+      } else {
+        friendlyError = "We encountered a temporary issue with the Gemini API. Please try again, as this is usually a temporary issue.";
+      }
+
+      setError(friendlyError);
       setStatusMessage("");
     }
   }, [videoFile, apiKey, language, durationInSeconds]);
