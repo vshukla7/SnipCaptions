@@ -47,27 +47,31 @@ export function ApiKeyModal({
           onClick={close}
         >
           <motion.div
-            className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--editor-panel)] p-6"
-            initial={{ scale: 0.95, y: 12 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.95, y: 12 }}
+            className="w-full max-w-md rounded-3xl border border-white/[0.06] bg-[#1C1C1E] p-6"
+            initial={{ scale: 0.95, opacity: 0, y: 8 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.95, opacity: 0, y: 8 }}
+            transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="mb-4 flex items-start justify-between">
+            <div className="mb-5 flex items-start justify-between">
               <div>
-                <h2 className="text-lg font-medium text-[var(--editor-text)]">
+                <h2 className="text-[17px] font-semibold text-white">
                   Gemini API Key
                 </h2>
-                <p className="mt-1 text-sm text-[var(--editor-text-muted)]">
-                  Stored only in your browser. Never sent to our servers.
+                <p className="mt-1 text-[13px] text-white/40">
+                  Stored in your browser only. Never sent to our servers.
                 </p>
               </div>
               <button
                 onClick={close}
-                className="rounded-lg p-1 text-[var(--editor-text-muted)] hover:bg-[var(--editor-card)]"
+                className="rounded-lg p-1 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
                 aria-label="Close"
               >
-                ✕
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
               </button>
             </div>
 
@@ -76,48 +80,46 @@ export function ApiKeyModal({
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               placeholder="AIza…"
-              className="w-full rounded-xl border border-[var(--border)] bg-[var(--editor-bg)] px-4 py-3 text-sm text-[var(--editor-text)] outline-none focus:border-[var(--editor-accent)]"
+              className="w-full rounded-xl border border-white/[0.06] bg-white/[0.04] px-4 py-3 text-[14px] text-white outline-none transition-colors placeholder:text-white/20 focus:border-[#2997FF]/40"
             />
 
-            {result === "ok" ? (
-              <p className="mt-3 text-sm text-[var(--success)]">
-                ✓ Key validated successfully.
+            {result === "ok" && (
+              <p className="mt-3 text-[13px] text-[#30D158]">
+                ✓ Key validated successfully
               </p>
-            ) : null}
-            {result === "bad" ? (
-              <p className="mt-3 text-sm text-[var(--destructive-2)]">
-                ✕ Could not validate this key. Check it and your network/CORS
-                settings.
+            )}
+            {result === "bad" && (
+              <p className="mt-3 text-[13px] text-[#FF453A]">
+                ✕ Could not validate this key
               </p>
-            ) : null}
+            )}
 
-            <div className="mt-5 flex justify-end gap-3">
+            <div className="mt-5 flex justify-end gap-2">
               <button
                 onClick={close}
-                className="rounded-xl px-4 py-2 text-sm font-medium text-[var(--editor-text-muted)] hover:bg-[var(--editor-card)]"
+                className="rounded-xl px-4 py-2 text-[13px] font-medium text-white/50 transition-colors hover:bg-white/[0.06]"
               >
                 Cancel
               </button>
               <button
                 onClick={save}
                 disabled={validating || draft.trim().length === 0}
-                className="rounded-xl bg-[var(--editor-accent)] px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+                className="rounded-xl bg-[#2997FF] px-5 py-2 text-[13px] font-medium text-white transition-opacity disabled:opacity-30"
               >
                 {validating ? "Validating…" : "Save Key"}
               </button>
             </div>
 
-            <p className="mt-4 text-xs text-[var(--editor-text-muted)]">
+            <p className="mt-4 text-[11px] text-white/25">
               Get a free key at{" "}
               <a
                 href="https://aistudio.google.com/apikey"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[var(--brand-blue)] underline"
+                className="text-[#2997FF] underline"
               >
                 aistudio.google.com/apikey
               </a>
-              . Enable &quot;All origins / CORS&quot; if required.
             </p>
           </motion.div>
         </motion.div>

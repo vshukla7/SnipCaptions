@@ -1,53 +1,44 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useApp } from "@/lib/store";
 import { ApiKeyModal } from "./ApiKeyModal";
-import { cn } from "@/lib/utils";
 
 export function Header() {
-  const { hasApiKey, transcribe, videoFile, status } = useApp();
+  const { hasApiKey, status } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
 
-  const busy = status === "transcribing" || status === "exporting";
-
   return (
-    <header className="sticky top-0 z-40 border-b border-[var(--editor-border)] bg-[var(--editor-header)]/90 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="leading-tight">
-            <p className="text-sm text-[var(--editor-text)]">
-              <span className="font-normal">Snip</span>
-              <span className="font-bold">Captions</span>
-            </p>
-          </div>
+    <header className="sticky top-0 z-40 backdrop-blur-xl bg-black/70 border-b border-white/[0.04]">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-3">
+        <div className="flex items-center gap-2.5">
+          <img src="/snipCaptions.svg" alt="" className="h-7 w-7 rounded-lg" />
+          <span className="text-[15px] font-semibold tracking-tight text-white">
+            SnipCaptions
+          </span>
         </div>
 
-        <div className="flex items-center gap-3">
-          {videoFile && hasApiKey ? (
-            <button
-              onClick={transcribe}
-              disabled={busy}
-              className="rounded-xl bg-[var(--brand-blue)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
-            >
-              {status === "transcribing" ? "Transcribing…" : "Generate Captions"}
-            </button>
-          ) : null}
-
+        <div className="flex items-center gap-2">
+          <Link
+            href="/blogs"
+            className="hidden rounded-full px-4 py-1.5 text-[13px] font-medium text-white/60 transition-colors hover:text-white sm:block"
+          >
+            Blog
+          </Link>
           <button
             onClick={() => setModalOpen(true)}
-            className={cn(
-              "rounded-xl border px-4 py-2 text-sm font-medium transition-colors",
-              hasApiKey
-                ? "border-[var(--success)] text-[var(--success)]"
-                : "border-[var(--border)] text-[var(--editor-text)] hover:border-[var(--editor-accent)]",
-            )}
+            className="rounded-full px-4 py-1.5 text-[13px] font-medium transition-all duration-200"
+            style={{
+              background: hasApiKey ? "rgba(48,209,88,0.12)" : "rgba(255,255,255,0.06)",
+              color: hasApiKey ? "#30D158" : "#8E8E93",
+              border: `1px solid ${hasApiKey ? "rgba(48,209,88,0.2)" : "rgba(255,255,255,0.06)"}`,
+            }}
           >
-            {hasApiKey ? "API Key ✓" : "Add API Key"}
+            {hasApiKey ? "✓ Connected" : "Add API Key"}
           </button>
         </div>
       </div>
-
       <ApiKeyModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </header>
   );

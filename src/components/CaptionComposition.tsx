@@ -242,7 +242,7 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>
       <Video
         src={src}
-        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        style={{ width: "100%", height: "100%", objectFit: "contain" }}
       />
       <AbsoluteFill
         style={{

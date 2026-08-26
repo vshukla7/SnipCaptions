@@ -1,20 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Player } from "@remotion/player";
-import { CaptionComposition } from "./CaptionComposition";
-import { ThemePicker } from "./ThemePicker";
-import { AdInterstitial } from "./Ads";
+import { useMemo, useState, useRef, useEffect, useCallback } from "react";
+import { motion } from "framer-motion";
 import { useApp } from "@/lib/store";
 import { CAPTION_THEMES } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { formatTime } from "@/lib/utils";
 
 const FPS = 30;
 
 const ASPECTS = [
-  { id: "9:16", label: "9:16 · Reels/Shorts", w: 1080, h: 1920 },
-  { id: "1:1", label: "1:1 · Square", w: 1080, h: 1080 },
-  { id: "16:9", label: "16:9 · Landscape", w: 1920, h: 1080 },
+  { id: "9:16", label: "9:16", w: 1080, h: 1920 },
+  { id: "1:1", label: "1:1", w: 1080, h: 1080 },
+  { id: "16:9", label: "16:9", w: 1920, h: 1080 },
 ] as const;
 
 export function Studio() {
@@ -24,15 +21,19 @@ export function Studio() {
     captionTheme,
     durationInSeconds,
     status,
-    statusMessage,
     progress,
     setStatus,
     setProgress,
     setStatusMessage,
+    setCaptionTheme,
   } = useApp();
 
   const [aspect, setAspect] = useState<(typeof ASPECTS)[number]>(ASPECTS[0]);
   const [exporting, setExporting] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const timelineRef = useRef<HTMLDivElement | null>(null);
 
   const accent = useMemo(
     () => CAPTION_THEMES.find((t) => t.id === captionTheme)?.accent ?? "#ffffff",
@@ -40,25 +41,80 @@ export function Studio() {
   );
 
   const durationInFrames = Math.max(1, Math.round(durationInSeconds * FPS));
-
   const ready = Boolean(videoUrl) && words.length > 0;
+
+  // Video playback sync — use rAF for smooth 60fps updates
+  useEffect(() => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    let raf: number;
+    const tick = () => {
+      setCurrentTime(vid.currentTime);
+      raf = requestAnimationFrame(tick);
+    };
+    const onPlay = () => {
+      setPlaying(true);
+      raf = requestAnimationFrame(tick);
+    };
+    const onPause = () => {
+      setPlaying(false);
+      cancelAnimationFrame(raf);
+    };
+    vid.addEventListener("play", onPlay);
+    vid.addEventListener("pause", onPause);
+    vid.addEventListener("ended", onPause);
+    if (!vid.paused) raf = requestAnimationFrame(tick);
+    return () => {
+      vid.removeEventListener("play", onPlay);
+      vid.removeEventListener("pause", onPause);
+      vid.removeEventListener("ended", onPause);
+      cancelAnimationFrame(raf);
+    };
+  }, [videoUrl]);
+
+  const togglePlay = useCallback(() => {
+    const vid = videoRef.current;
+    if (!vid) return;
+    if (vid.paused) vid.play();
+    else vid.pause();
+  }, []);
+
+  const seek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    if (videoRef.current) {
+      videoRef.current.currentTime = pct * (videoRef.current.duration || 0);
+    }
+  }, []);
+
+  // Find active caption word for current time
+  const activeWordIndex = useMemo(() => {
+    if (!words.length) return -1;
+    return words.findIndex((w) => currentTime >= w.start && currentTime <= w.end);
+  }, [words, currentTime]);
+
+  // Active line (group words into lines of 3)
+  const activeLineText = useMemo(() => {
+    if (activeWordIndex < 0) return null;
+    const lineStart = Math.floor(activeWordIndex / 3) * 3;
+    const lineWords = words.slice(lineStart, lineStart + 3);
+    return lineWords.map((w) => w.word).join(" ");
+  }, [words, activeWordIndex]);
 
   const handleExport = async () => {
     if (!ready || !videoUrl) return;
     setExporting(true);
     setStatus("exporting");
     setProgress(0);
-    setStatusMessage("Rendering video in your browser…");
+    setStatusMessage("Rendering video…");
     try {
-      console.log("[SnipCaptions:studio] export start · theme=", captionTheme, "durFrames=", durationInFrames, "size=", aspect.w + "x" + aspect.h, "words=", words.length, "src=", videoUrl);
       const { renderMediaOnWeb } = await import("@remotion/web-renderer");
-      console.log("[SnipCaptions:studio] @remotion/web-renderer imported");
       const controller = new AbortController();
 
       const { getBlob } = await renderMediaOnWeb({
         composition: {
           id: "snipcaptions",
-          component: CaptionComposition as never,
+          component: (await import("./CaptionComposition")).CaptionComposition as never,
           durationInFrames,
           fps: FPS,
           width: aspect.w,
@@ -75,18 +131,12 @@ export function Studio() {
         audioBitrate: "medium",
         signal: controller.signal,
         onProgress: (p: unknown) => {
-          const value =
-            typeof p === "number" ? p : (p as { progress?: number })?.progress ?? 0;
-          if (Math.round(value * 100) % 10 === 0) {
-            console.log("[SnipCaptions:studio] render progress=", (value * 100).toFixed(0) + "%");
-          }
+          const value = typeof p === "number" ? p : (p as { progress?: number })?.progress ?? 0;
           setProgress(value);
         },
       });
-      console.log("[SnipCaptions:studio] renderMediaOnWeb returned, fetching blob…");
 
       const blob = await getBlob();
-      console.log("[SnipCaptions:studio] blob ready · size=", (blob.size / 1024 / 1024).toFixed(2) + "MB", "type=", blob.type);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -97,116 +147,266 @@ export function Studio() {
       URL.revokeObjectURL(url);
 
       setProgress(1);
-      setStatusMessage("Export complete — your video is downloading.");
-      void fetch("/api/track", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ eventType: "VIDEO_EXPORT" }),
-      }).then(() => console.log("[SnipCaptions:studio] /api/track export event sent")).catch(() => {});
+      setStatusMessage("Export complete");
     } catch (e) {
-      console.error("[SnipCaptions:studio] export error", e);
-      setStatusMessage(
-        e instanceof Error ? e.message : "Export failed in this browser.",
-      );
+      console.error("[Studio] export error", e);
+      setStatusMessage(e instanceof Error ? e.message : "Export failed");
     } finally {
       setExporting(false);
       setStatus("ready");
     }
   };
 
+  const progressPct = durationInSeconds > 0 ? (currentTime / durationInSeconds) * 100 : 0;
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-      <AdInterstitial
-        open={exporting}
-        title="Thanks for using SnipCaptions — your HD export is rendering locally."
-      />
-
-      {/* Preview */}
-      <div className="rounded-2xl border border-[var(--border)] bg-[var(--editor-panel)] p-4">
-        <div className="overflow-hidden rounded-xl bg-black">
-          {ready ? (
-            <div style={{ aspectRatio: `${aspect.w} / ${aspect.h}` }}>
-              <Player
-                component={CaptionComposition as never}
-                inputProps={{ src: videoUrl, words, theme: captionTheme, accentColor: accent }}
-                durationInFrames={durationInFrames}
-                fps={FPS}
-                compositionWidth={aspect.w}
-                compositionHeight={aspect.h}
-                style={{ width: "100%", height: "100%" }}
-                controls
-                loop
-              />
-            </div>
-          ) : (
-            <div
-              className="flex items-center justify-center text-sm text-[var(--editor-text-muted)]"
-              style={{ aspectRatio: `${aspect.w} / ${aspect.h}` }}
-            >
-              Upload a video and generate captions to preview.
-            </div>
-          )}
-        </div>
-
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          {ASPECTS.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              disabled={!ready}
-              onClick={() => setAspect(a)}
-              className={cn(
-                "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40",
-                aspect.id === a.id
-                  ? "border-[var(--editor-accent)] bg-[var(--editor-card)] text-[var(--editor-text)]"
-                  : "border-[var(--border)] text-[var(--editor-text-muted)] hover:border-[var(--editor-accent)]/60",
-              )}
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Controls */}
-      <div className="space-y-5">
-        <div>
-          <h3 className="mb-3 text-sm font-medium uppercase tracking-wide text-[var(--editor-text-muted)]">
-            Caption Theme
-          </h3>
-          <ThemePicker />
-        </div>
-
-        <div className="rounded-2xl border border-[var(--border)] bg-[var(--editor-panel)] p-4">
-          <button
-            type="button"
-            onClick={handleExport}
-            disabled={!ready || exporting}
-            className="w-full rounded-xl bg-[var(--brand-orange)] px-4 py-3 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-40"
-          >
-            {exporting
-              ? `Exporting… ${Math.round(progress * 100)}%`
-              : "Export 1080p MP4 (No Watermark)"}
-          </button>
-
-          {exporting ? (
-            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[var(--editor-card)]">
+    <div className="flex h-[calc(100vh-52px)] flex-col overflow-hidden">
+      {/* Main content: Video left + Themes right */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left: Video preview */}
+        <div className="flex flex-1 flex-col">
+          <div className="flex flex-1 items-center justify-center bg-black p-6">
+            {ready && videoUrl ? (
               <div
-                className="h-full rounded-full bg-[var(--brand-orange)] transition-all"
-                style={{ width: `${Math.round(progress * 100)}%` }}
-              />
-            </div>
-          ) : null}
+                className="relative overflow-hidden rounded-2xl bg-black"
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "100%",
+                  aspectRatio: `${aspect.w} / ${aspect.h}`,
+                }}
+              >
+                <video
+                  ref={videoRef}
+                  src={videoUrl}
+                  className="h-full w-full object-contain"
+                  playsInline
+                  loop
+                  onClick={togglePlay}
+                />
+                {/* Caption overlay */}
+                {activeLineText && (
+                  <div className="absolute bottom-8 left-0 right-0 flex justify-center px-4">
+                    <div
+                      className="rounded-xl px-4 py-2 text-center"
+                      style={{
+                        background: "rgba(0,0,0,0.65)",
+                        backdropFilter: "blur(8px)",
+                      }}
+                    >
+                      <p
+                        className="text-[22px] font-bold leading-tight"
+                        style={{
+                          color: captionTheme === "neon" ? accent : "#fff",
+                          textShadow: captionTheme === "neon"
+                            ? `0 0 12px ${accent}, 0 0 30px ${accent}`
+                            : "0 2px 8px rgba(0,0,0,0.4)",
+                          fontFamily: captionTheme === "clean" || captionTheme === "highlight"
+                            ? "var(--font-display)"
+                            : "var(--font-creative)",
+                        }}
+                      >
+                        {activeLineText}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {/* Play/pause overlay */}
+                {!playing && (
+                  <button
+                    onClick={togglePlay}
+                    className="absolute inset-0 flex items-center justify-center bg-black/20 transition-opacity hover:bg-black/30"
+                  >
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="#000">
+                        <polygon points="6,3 20,12 6,21" />
+                      </svg>
+                    </div>
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="text-[14px] text-white/20">No video</div>
+            )}
+          </div>
 
-          <p className="mt-3 text-xs text-[var(--editor-text-muted)]">
-            Rendering uses Remotion&apos;s in-browser WebCodecs engine. Your file
-            never leaves the device.
-          </p>
+          {/* Timeline bar */}
+          <div className="shrink-0 border-t border-white/[0.04] bg-[#111] px-4 py-3">
+            <div className="flex items-center gap-3">
+              {/* Play controls */}
+              <button
+                onClick={() => {
+                  if (videoRef.current) videoRef.current.currentTime = 0;
+                }}
+                className="text-white/40 transition-colors hover:text-white/70"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="19 20 9 12 19 4 19 20" />
+                  <line x1="5" y1="19" x2="5" y2="5" />
+                </svg>
+              </button>
+              <button
+                onClick={togglePlay}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-[#2997FF] text-white transition-transform hover:scale-105"
+              >
+                {playing ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="4" width="4" height="16" rx="1" />
+                    <rect x="14" y="4" width="4" height="16" rx="1" />
+                  </svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="6,3 20,12 6,21" />
+                  </svg>
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  if (videoRef.current) videoRef.current.currentTime = videoRef.current.duration || 0;
+                }}
+                className="text-white/40 transition-colors hover:text-white/70"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="5 4 15 12 5 20 5 4" />
+                  <line x1="19" y1="5" x2="19" y2="19" />
+                </svg>
+              </button>
+
+              {/* Time display */}
+              <span className="min-w-[80px] text-[12px] font-mono text-white/40">
+                {formatTime(currentTime)} / {formatTime(durationInSeconds)}
+              </span>
+
+              {/* Timeline scrubber */}
+              <div
+                ref={timelineRef}
+                onClick={seek}
+                className="group relative flex-1 cursor-pointer"
+              >
+                {/* Caption word blocks */}
+                <div className="absolute inset-x-0 top-0 h-5 overflow-hidden rounded">
+                  {words.map((w, i) => {
+                    const left = durationInSeconds > 0 ? (w.start / durationInSeconds) * 100 : 0;
+                    const width = durationInSeconds > 0 ? ((w.end - w.start) / durationInSeconds) * 100 : 0;
+                    const isActive = i === activeWordIndex;
+                    return (
+                      <div
+                        key={i}
+                        className="absolute top-0.5 h-3.5 rounded-sm transition-colors duration-100"
+                        style={{
+                          left: `${left}%`,
+                          width: `${Math.max(width, 0.3)}%`,
+                          background: isActive ? accent : "rgba(255,255,255,0.12)",
+                          boxShadow: isActive ? `0 0 6px ${accent}40` : undefined,
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+
+                {/* Scrub track */}
+                <div className="mt-6 h-1 w-full rounded-full bg-white/[0.06] group-hover:h-1.5">
+                  <div
+                    className="h-full rounded-full bg-white/30 transition-all duration-75"
+                    style={{ width: `${progressPct}%` }}
+                  />
+                </div>
+
+                {/* Playhead */}
+                <div
+                  className="absolute top-4 h-4 w-2.5 -translate-x-1/2 rounded-sm bg-white shadow-lg transition-[left] duration-75"
+                  style={{ left: `${progressPct}%` }}
+                />
+              </div>
+
+              {/* Zoom */}
+              <span className="text-[11px] text-white/25">100%</span>
+            </div>
+          </div>
         </div>
 
-        {status === "exporting" && statusMessage ? (
-          <p className="text-xs text-[var(--editor-text-muted)]">{statusMessage}</p>
-        ) : null}
+        {/* Right: Themes sidebar */}
+        <div className="w-[280px] border-l border-white/[0.04] bg-[#111]">
+          {/* Tabs */}
+          <div className="flex border-b border-white/[0.04]">
+            <button className="flex-1 py-3 text-[12px] font-medium text-white/40 transition-colors hover:text-white/60">
+              Text
+            </button>
+            <button className="flex-1 border-b-2 border-[#2997FF] py-3 text-[12px] font-medium text-white">
+              Templates
+            </button>
+          </div>
+
+          {/* Built-in Templates badge */}
+          <div className="px-4 pt-4">
+            <span className="inline-block rounded-full bg-[#2997FF]/10 px-3 py-1 text-[11px] font-medium text-[#2997FF]">
+              Built-in Templates
+            </span>
+          </div>
+
+          {/* Dynamic Captions heading */}
+          <p className="px-4 pt-4 pb-2 text-[10px] font-semibold uppercase tracking-widest text-white/25">
+            Dynamic Captions
+          </p>
+
+          {/* Theme cards */}
+          <div className="space-y-2 px-3 pb-4">
+            {CAPTION_THEMES.map((t) => {
+              const active = t.id === captionTheme;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setCaptionTheme(t.id)}
+                  className="w-full rounded-xl p-3 text-left transition-all duration-200"
+                  style={{
+                    background: active ? "rgba(255,255,255,0.06)" : "transparent",
+                    border: `1px solid ${active ? "rgba(255,255,255,0.1)" : "transparent"}`,
+                  }}
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[13px] font-medium text-white/90">{t.name}</span>
+                    {t.id === "neon" && (
+                      <span className="rounded bg-[#2997FF]/15 px-1.5 py-0.5 text-[9px] font-semibold text-[#2997FF]">
+                        Popular
+                      </span>
+                    )}
+                    {t.id === "kinetic" && (
+                      <span className="rounded bg-[#30D158]/15 px-1.5 py-0.5 text-[9px] font-semibold text-[#30D158]">
+                        New
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    className="flex h-14 items-center justify-center rounded-lg"
+                    style={{ background: "rgba(0,0,0,0.4)" }}
+                  >
+                    <p
+                      className="text-[18px] font-bold"
+                      style={{
+                        color: t.accent,
+                        fontFamily: t.id === "clean" || t.id === "highlight"
+                          ? "var(--font-display)"
+                          : "var(--font-creative)",
+                        textShadow: t.id === "neon" ? `0 0 8px ${t.accent}, 0 0 20px ${t.accent}` : undefined,
+                      }}
+                    >
+                      the quick <span style={{ color: t.accent }}>BROWN</span>
+                    </p>
+                  </div>
+                  <div className="mt-1.5 flex items-center gap-1.5">
+                    <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[9px] text-white/40">
+                      {t.id === "kinetic" || t.id === "highlight" ? "Word" : "Bold"}
+                    </span>
+                    {t.id === "neon" && (
+                      <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[9px] text-white/40">
+                        Glow
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );

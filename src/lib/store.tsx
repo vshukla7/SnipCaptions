@@ -136,7 +136,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setStatus("transcribing");
     setProgress(0);
     setWordsSoFar(0);
-    setStatusMessage("Starting transcription…");
+    setStatusMessage("Uploading…");
     try {
       const result = await transcribeVideo({
         apiKey,

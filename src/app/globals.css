@@ -1,62 +1,41 @@
 @import "tailwindcss";
 @import "@fontsource-variable/geist";
 
-/* ============================================================
-   SnipCaptions — Design System
-   Fonts, brand colors and the single black editor theme.
-   ============================================================ */
-
-/* --- Brand / accent colors (constant across themes) --- */
 :root {
-  --brand-blue: #007aff;
-  --brand-blue-2: #3b82f6;
-  --brand-orange: #f97316;
-  --destructive: #ef4444;
-  --destructive-2: #ff3b30;
-  --success: #30d158;
-  --overlay-pink: #ff2d55;
-  --audio-green: #30d158;
-  --text-amber: #ff9f0a;
-  --shape-purple: #af52de;
+  --brand-blue: #2997FF;
+  --brand-orange: #FF9F0A;
+  --destructive: #FF453A;
+  --destructive-2: #FF453A;
+  --success: #30D158;
 
-  /* Font stacks (set in <head> via Google Fonts + fontsource) */
-  --font-ui: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI",
-    Roboto, sans-serif;
-  --font-variable: "Geist Variable", "Geist", sans-serif;
+  --font-ui: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
   --font-display: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-serif: "Instrument Serif", Georgia, serif;
   --font-creative: "Outfit", "Poppins", sans-serif;
-}
 
-/* ============================================================
-   THEME: Black — clean, slim Apple-style (single theme)
-   ============================================================ */
-:root {
   --background: #000000;
-  --foreground: #f5f5f7;
-  --card: #0a0a0a;
-  --primary: #f5f5f7;
-  --secondary: #161618;
-  --muted: #161618;
-  --muted-foreground: #86868b;
-  --accent: #1c1c1e;
-  --border: rgba(255, 255, 255, 0.08);
-  --ring: #2997ff;
+  --foreground: #F5F5F7;
+  --card: #1C1C1E;
+  --card-hover: #2C2C2E;
+  --primary: #F5F5F7;
+  --secondary: #1C1C1E;
+  --muted: #1C1C1E;
+  --muted-foreground: #8E8E93;
+  --border: rgba(255,255,255,0.06);
+  --border-subtle: rgba(255,255,255,0.04);
+  --ring: #2997FF;
 
   --editor-bg: #000000;
-  --editor-panel: #0a0a0a;
-  --editor-sidebar: #000000;
-  --editor-header: #000000;
-  --editor-border: rgba(255, 255, 255, 0.08);
-  --editor-accent: #2997ff;
-  --editor-card: #161618;
-  --editor-text: #f5f5f7;
-  --editor-text-muted: #86868b;
+  --editor-panel: #1C1C1E;
+  --editor-sidebar: #111111;
+  --editor-header: rgba(0,0,0,0.8);
+  --editor-border: rgba(255,255,255,0.06);
+  --editor-accent: #2997FF;
+  --editor-card: #2C2C2E;
+  --editor-text: #F5F5F7;
+  --editor-text-muted: #8E8E93;
 }
 
-/* ============================================================
-   Tailwind v4 token mapping (runtime resolution via var())
-   ============================================================ */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -65,7 +44,6 @@
   --color-secondary: var(--secondary);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
   --color-border: var(--border);
   --color-ring: var(--ring);
 
@@ -80,18 +58,12 @@
   --color-editor-text-muted: var(--editor-text-muted);
 
   --color-brand-blue: var(--brand-blue);
-  --color-brand-blue-2: var(--brand-blue-2);
   --color-brand-orange: var(--brand-orange);
   --color-destructive: var(--destructive);
   --color-destructive-2: var(--destructive-2);
   --color-success: var(--success);
-  --color-overlay-pink: var(--overlay-pink);
-  --color-audio-green: var(--audio-green);
-  --color-text-amber: var(--text-amber);
-  --color-shape-purple: var(--shape-purple);
 
   --font-ui: var(--font-ui);
-  --font-variable: var(--font-variable);
   --font-display: var(--font-display);
   --font-serif: var(--font-serif);
   --font-creative: var(--font-creative);
@@ -101,118 +73,56 @@
   border-color: var(--border);
 }
 
-html,
-body {
+html, body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-ui);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scrollbar-width: none;
 }
 
 body {
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
-/* Thin, themed scrollbars */
 ::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--accent);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--muted-foreground);
-  background-clip: padding-box;
+  width: 0;
+  height: 0;
 }
 
-/* Focus ring uses the themed ring color */
 :focus-visible {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
 
-/* Local custom font references (graceful fallback if not installed) */
-@font-face {
-  font-family: "Celosia Nature";
-  src: local("Celosia Nature");
-  font-display: swap;
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-@font-face {
-  font-family: "Gilroy ExtraBold";
-  src: local("Gilroy ExtraBold"), local("Gilroy-ExtraBold");
-  font-display: swap;
+@keyframes fade-in-scale {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
 }
-@font-face {
-  font-family: "Helvetica Bold";
-  src: local("Helvetica Bold"), local("Helvetica-Bold");
-  font-display: swap;
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
-@font-face {
-  font-family: "Longmile";
-  src: local("Longmile");
-  font-display: swap;
-}
-@font-face {
-  font-family: "Helvetica Rounded";
-  src: local("Helvetica Rounded"), local("HelveticaRounded");
-  font-display: swap;
-}
-@font-face {
-  font-family: "NCL Gasdrifo Demo";
-  src: local("NCL Gasdrifo Demo");
-  font-display: swap;
-}
-@font-face {
-  font-family: "Qurova Demo Light";
-  src: local("Qurova Demo Light");
-  font-display: swap;
-}
-@font-face {
-  font-family: "Readex Pro Medium";
-  src: local("Readex Pro Medium"), local("ReadexPro-Medium");
-  font-display: swap;
-}
-@font-face {
-  font-family: "Retro Floral";
-  src: local("Retro Floral");
-  font-display: swap;
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
-@keyframes sc-shimmer {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
+.anim-fade-in {
+  animation: fade-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
-.sc-shimmer {
-  background: linear-gradient(
-    90deg,
-    var(--accent) 25%,
-    var(--editor-border) 50%,
-    var(--accent) 75%
-  );
-  background-size: 200% 100%;
-  animation: sc-shimmer 1.4s infinite;
+.anim-fade-in-scale {
+  animation: fade-in-scale 0.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
-
-@keyframes sc-pulse {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.4;
-  }
+.anim-slide-up {
+  animation: slide-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
-.sc-pulse {
-  animation: sc-pulse 1.2s ease-in-out infinite;
+.anim-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
 }

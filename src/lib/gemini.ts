@@ -1,7 +1,7 @@
 import { GoogleGenAI, type GenerateContentConfig, type Part } from "@google/genai";
 import type { TranscriptionResult, Word } from "./types";
 
-export const GEMINI_MODEL = "gemini-2.5-flash-lite";
+export const GEMINI_MODEL = "gemini-3.6-flash";
 
 const TRANSCRIPTION_SCHEMA = {
   type: "OBJECT",
@@ -71,9 +71,12 @@ export async function transcribeVideo({
 }: TranscribeOptions): Promise<TranscriptionResult> {
   const ai = new GoogleGenAI({ apiKey });
 
-  onStatus?.("Uploading media to Gemini…");
+  onStatus?.("Uploading media…");
+  onProgress?.({ progress: 0.05, words: 0 });
   console.log("[SnipCaptions:gemini] uploading file:", file.name, file.type, file.size, "· model=", GEMINI_MODEL);
+  onProgress?.({ progress: 0.10, words: 0 });
   const uploaded = await ai.files.upload({ file });
+  onProgress?.({ progress: 0.25, words: 0 });
   console.log("[SnipCaptions:gemini] uploaded →", uploaded.uri, uploaded.mimeType);
 
   try {
@@ -93,27 +96,32 @@ export async function transcribeVideo({
       temperature: 0.1,
     };
 
-    onStatus?.("Transcribing audio with Gemini…");
-    console.log("[SnipCaptions:gemini] starting stream · language=", language, "estimatedTotal based on", durationSeconds, "s");
-    // Stream the response so we can show real, incremental progress.
-    const estimatedTotal = Math.max(1, Math.round((durationSeconds ?? 30) * 2.5));
+    onStatus?.("Processing audio…");
+    onProgress?.({ progress: 0.35, words: 0 });
+    console.log("[SnipCaptions:gemini] starting stream · language=", language, "durationSeconds=", durationSeconds);
     let acc = "";
     let lastWordCount = 0;
+    const startTime = Date.now();
     const stream = await ai.models.generateContentStream({
       model: GEMINI_MODEL,
       contents: [{ parts }],
       config,
     });
 
+    onStatus?.("Transcribing…");
     for await (const chunk of stream) {
       acc += chunk.text ?? "";
-      const words = (acc.match(/"word"/g) ?? []).length;
+      const words = (acc.match(/"word"\s*:/g) ?? []).length;
       if (words !== lastWordCount) {
         lastWordCount = words;
-        console.log("[SnipCaptions:gemini] stream progress · words=", words, "progress=", Math.min(0.95, words / estimatedTotal).toFixed(2));
+        console.log("[SnipCaptions:gemini] stream progress · words=", words);
       }
+      const elapsed = (Date.now() - startTime) / 1000;
+      const estimatedDuration = durationSeconds ?? 30;
+      const timeProgress = Math.min(0.90, 0.40 + (elapsed / Math.max(estimatedDuration * 3, 10)) * 0.55);
+      const contentProgress = Math.min(0.95, 0.40 + (words / Math.max(estimatedDuration * 2, 10)) * 0.55);
       onProgress?.({
-        progress: Math.min(0.95, words / estimatedTotal),
+        progress: Math.max(timeProgress, contentProgress),
         words,
       });
     }

@@ -3,12 +3,49 @@ import "./globals.css";
 import { Providers } from "@/components/Providers";
 
 export const metadata: Metadata = {
-  title: "SnipCaptions — Auto Captions for Short-Form Video",
-  description:
-    "Free, watermark-free 1080p auto-captions in your browser. Bring your own Gemini API key. Neon, Kinetic Bounce, Clean Minimal and Word-by-Word highlight themes.",
   metadataBase: new URL(
     process.env.NEXT_PUBLIC_SITE_URL ?? "https://snipcaptions.in",
   ),
+  applicationName: "SnipCaptions",
+  title: {
+    default: "SnipCaptions — Free Auto Captions for Short-Form Video",
+    template: "%s — SnipCaptions",
+  },
+  description:
+    "Free, watermark-free 1080p auto-captions for Reels, YouTube Shorts and TikTok. Client-side processing with your own Gemini API key. Neon, Kinetic, Clean & Word-by-Word caption themes.",
+  keywords: [
+    "auto captions",
+    "video captions",
+    "reels captions",
+    "youtube shorts captions",
+    "tiktok captions",
+    "gemini transcription",
+    "no watermark",
+    "1080p export",
+    "client side video processing",
+  ],
+  authors: [{ name: "SnipCaptions" }],
+  category: "technology",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "SnipCaptions",
+    title: "SnipCaptions — Free Auto Captions for Short-Form Video",
+    description:
+      "Free, watermark-free 1080p auto-captions. Client-side processing with your own Gemini API key.",
+    url: "/",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SnipCaptions — Free Auto Captions for Short-Form Video",
+    description:
+      "Free, watermark-free 1080p auto-captions. Client-side processing with your own Gemini API key.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true },
+  },
 };
 
 export const viewport: Viewport = {
