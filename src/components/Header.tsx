@@ -7,7 +7,7 @@ import { ApiKeyModal } from "./ApiKeyModal";
 import { SetupGuideModal } from "./SetupGuideModal";
 
 export function Header() {
-  const { hasApiKey, status, reset, transcription } = useApp();
+  const { hasApiKey, status, reset, transcription, openDemoStudio } = useApp();
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
 
@@ -34,12 +34,19 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {showStudio && (
+          {showStudio ? (
             <button
               onClick={reset}
               className="rounded-full bg-white/[0.06] px-3.5 py-1.5 text-[12px] font-medium text-white/80 transition-all hover:bg-white/[0.12] hover:text-white"
             >
               + New Video
+            </button>
+          ) : (
+            <button
+              onClick={openDemoStudio}
+              className="rounded-full bg-[#2997FF]/10 border border-[#2997FF]/30 px-3.5 py-1.5 text-[12px] font-semibold text-[#2997FF] transition-all hover:bg-[#2997FF]/20"
+            >
+              Studio Preview
             </button>
           )}
 

@@ -173,7 +173,7 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
           fontFamily: baseFont,
           fontSize,
           fontWeight: 800,
-          color: "#ffffff",
+          color: accentColor || "#ffffff",
           textAlign: "center",
           lineHeight: 1.15,
           textShadow: "0 2px 14px rgba(0,0,0,0.6)",
@@ -244,10 +244,18 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
 
   return (
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>
-      <Video
-        src={src}
-        style={{ width: "100%", height: "100%", objectFit: "contain" }}
-      />
+      {Boolean(src && src.trim()) ? (
+        <Video
+          src={src}
+          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+        />
+      ) : (
+        <AbsoluteFill style={{ backgroundColor: "#121214", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ color: "rgba(255,255,255,0.3)", fontFamily: "sans-serif", fontSize: 24, textAlign: "center" }}>
+            Studio Demo Preview Mode
+          </div>
+        </AbsoluteFill>
+      )}
       <div
         style={{
           position: "absolute",

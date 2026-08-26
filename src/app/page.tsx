@@ -18,6 +18,7 @@ export default function Home() {
     wordsSoFar,
     transcription,
     transcribe,
+    openDemoStudio,
     error,
     statusMessage,
   } = useApp();
@@ -123,6 +124,14 @@ export default function Home() {
                 }}
               >
                 {busy ? "Transcribing…" : "Generate Captions"}
+              </button>
+
+              <button
+                type="button"
+                onClick={openDemoStudio}
+                className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2.5 text-[13px] font-medium text-[#2997FF] transition-colors hover:bg-white/[0.06]"
+              >
+                Open Studio Preview (Demo)
               </button>
 
               {!hasApiKey && (

@@ -43,6 +43,8 @@ interface AppContextValue {
   customAccentColor: string | null;
   setCustomAccentColor: (c: string | null) => void;
 
+  recentColors: string[];
+
   words: Word[];
   transcription: TranscriptionResult | null;
   durationInSeconds: number;
@@ -54,6 +56,8 @@ interface AppContextValue {
   error: string | null;
 
   transcribe: () => Promise<void>;
+  openDemoStudio: () => void;
+  updateWord: (index: number, newWord: string) => void;
   reset: () => void;
   setStatusMessage: (m: string) => void;
   setProgress: (p: number) => void;
@@ -66,6 +70,8 @@ const API_KEY_STORAGE = "sc_api_key";
 const LANG_STORAGE = "sc_language";
 const THEME_STORAGE = "sc_caption_theme";
 
+const RECENT_COLORS_STORAGE = "sc_recent_colors";
+
 export function AppProvider({ children }: { children: ReactNode }) {
   const [apiKey, setApiKeyState] = useState("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -74,7 +80,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [captionTheme, setCaptionThemeState] = useState<CaptionThemeId>("clean");
   const [captionPosition, setCaptionPosition] = useState<CaptionPosition>({ x: 50, y: 80 });
   const [captionScale, setCaptionScale] = useState<number>(1.0);
-  const [customAccentColor, setCustomAccentColor] = useState<string | null>(null);
+  const [customAccentColor, setCustomAccentColorState] = useState<string | null>(null);
+  const [recentColors, setRecentColors] = useState<string[]>([]);
   const [transcription, setTranscription] =
     useState<TranscriptionResult | null>(null);
   const [status, setStatus] = useState<AppStatus>("idle");
@@ -92,6 +99,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCaptionThemeState(
       (localStorage.getItem(THEME_STORAGE) as CaptionThemeId) ?? "clean",
     );
+    try {
+      const raw = localStorage.getItem(RECENT_COLORS_STORAGE);
+      if (raw) setRecentColors(JSON.parse(raw));
+    } catch {}
   }, []);
 
   const setApiKey = useCallback((k: string) => {
@@ -107,6 +118,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setCaptionTheme = useCallback((t: CaptionThemeId) => {
     setCaptionThemeState(t);
     localStorage.setItem(THEME_STORAGE, t);
+  }, []);
+
+  const setCustomAccentColor = useCallback((c: string | null) => {
+    setCustomAccentColorState(c);
+    if (c) {
+      setRecentColors((prev) => {
+        const filtered = prev.filter((item) => item.toLowerCase() !== c.toLowerCase());
+        const updated = [c, ...filtered].slice(0, 6);
+        localStorage.setItem(RECENT_COLORS_STORAGE, JSON.stringify(updated));
+        return updated;
+      });
+    }
   }, []);
 
   const setVideo = useCallback((f: File | null) => {
@@ -176,6 +199,41 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [videoFile, apiKey, language, durationInSeconds]);
 
+  const openDemoStudio = useCallback(() => {
+    const dummyWords: Word[] = [
+      { word: "Welcome", start: 0.1, end: 0.5 },
+      { word: "to", start: 0.55, end: 0.8 },
+      { word: "SnipCaptions", start: 0.85, end: 1.4 },
+      { word: "Studio", start: 1.45, end: 1.9 },
+      { word: "Mode", start: 1.95, end: 2.3 },
+      { word: "customize", start: 2.35, end: 2.8 },
+      { word: "your", start: 2.85, end: 3.1 },
+      { word: "captions", start: 3.15, end: 3.6 },
+      { word: "instantly!", start: 3.65, end: 4.2 },
+    ];
+    setTranscription({
+      language: "en",
+      text: "Welcome to SnipCaptions Studio Mode customize your captions instantly!",
+      words: dummyWords,
+    });
+    setDurationInSeconds(4.5);
+    setStatus("ready");
+    setError(null);
+  }, []);
+
+  const updateWord = useCallback((index: number, newWord: string) => {
+    setTranscription((prev) => {
+      if (!prev || !prev.words[index]) return prev;
+      const newWords = [...prev.words];
+      newWords[index] = { ...newWords[index], word: newWord };
+      return {
+        ...prev,
+        words: newWords,
+        text: newWords.map((w) => w.word).join(" "),
+      };
+    });
+  }, []);
+
   const reset = useCallback(() => {
     setVideo(null);
     setTranscription(null);
@@ -204,15 +262,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCaptionScale,
     customAccentColor,
     setCustomAccentColor,
+    recentColors,
     words,
     transcription,
     durationInSeconds,
     status,
-    statusMessage,
     progress,
+    statusMessage,
     wordsSoFar,
     error,
     transcribe,
+    openDemoStudio,
+    updateWord,
     reset,
     setStatusMessage,
     setProgress,

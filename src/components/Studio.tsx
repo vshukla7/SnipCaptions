@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { Player } from "@remotion/player";
 import { useApp } from "@/lib/store";
 import { CAPTION_THEMES } from "@/lib/types";
@@ -19,7 +19,7 @@ const PRESET_COLORS = [
   "#af52de",
 ];
 
-// Fallback dummy words for instant studio UI preview & coding
+// Fallback dummy words for instant studio UI preview
 const DUMMY_WORDS = [
   { word: "the", start: 0.1, end: 0.4 },
   { word: "quick", start: 0.45, end: 0.8 },
@@ -50,16 +50,17 @@ export function Studio() {
     setProgress,
     setStatusMessage,
     setCaptionTheme,
+    updateWord,
+    recentColors,
   } = useApp();
 
-  // Use uploaded words/duration or fallback dummy data for instant live preview
+  // Use uploaded words/duration or fallback dummy data for live preview
   const words = storeWords && storeWords.length > 0 ? storeWords : DUMMY_WORDS;
   const durationInSeconds = storeDuration > 0 ? storeDuration : 5;
 
   const [exporting, setExporting] = useState(false);
   const [naturalAspect, setNaturalAspect] = useState<number | null>(null);
-  const [activeTab, setActiveTab] = useState<"templates" | "settings">("templates");
-
+  const [activeTab, setActiveTab] = useState<"templates" | "settings" | "transcript">("templates");
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [playerDims, setPlayerDims] = useState<{ width: number; height: number }>({
@@ -115,8 +116,8 @@ export function Studio() {
       const { renderMediaOnWeb } = await import("@remotion/web-renderer");
       const controller = new AbortController();
 
-      const aspectW = naturalAspect ? Math.round(1080 * naturalAspect) : 1080;
-      const aspectH = 1920;
+      const aspectW = naturalAspect && naturalAspect > 1 ? 1920 : 1080;
+      const aspectH = naturalAspect && naturalAspect > 1 ? Math.round(1920 / naturalAspect) : 1920;
 
       const { getBlob } = await renderMediaOnWeb({
         composition: {
@@ -212,7 +213,7 @@ export function Studio() {
 
       {/* Main Studio View (Remotion Player + Right Sidebar) */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left: Player Viewport with Remotion Built-in Player */}
+        {/* Left: Player Viewport */}
         <div className="flex flex-1 flex-col overflow-hidden bg-black/60">
           <div className="flex flex-1 items-center justify-center p-3 sm:p-5 min-h-0 min-w-0">
             {ready ? (
@@ -265,13 +266,13 @@ export function Studio() {
           </div>
         </div>
 
-        {/* Right: Studio Sidebar (Templates & Style Options) */}
-        <div className="w-[310px] shrink-0 border-l border-white/[0.06] bg-[#121214] flex flex-col">
+        {/* Right: Studio Sidebar (3 Tabs: Templates, Style & Position, Transcript) */}
+        <div className="w-[320px] shrink-0 border-l border-white/[0.06] bg-[#121214] flex flex-col">
           {/* Tabs */}
           <div className="flex border-b border-white/[0.06] bg-black/20">
             <button
               onClick={() => setActiveTab("templates")}
-              className={`flex-1 py-3 text-[12px] font-semibold transition-all ${
+              className={`flex-1 py-3 text-[11px] font-semibold transition-all ${
                 activeTab === "templates"
                   ? "border-b-2 border-[#2997FF] text-white bg-white/[0.02]"
                   : "text-white/40 hover:text-white/70"
@@ -281,18 +282,29 @@ export function Studio() {
             </button>
             <button
               onClick={() => setActiveTab("settings")}
-              className={`flex-1 py-3 text-[12px] font-semibold transition-all ${
+              className={`flex-1 py-3 text-[11px] font-semibold transition-all ${
                 activeTab === "settings"
                   ? "border-b-2 border-[#2997FF] text-white bg-white/[0.02]"
                   : "text-white/40 hover:text-white/70"
               }`}
             >
-              Style & Color
+              Style & Position
+            </button>
+            <button
+              onClick={() => setActiveTab("transcript")}
+              className={`flex-1 py-3 text-[11px] font-semibold transition-all ${
+                activeTab === "transcript"
+                  ? "border-b-2 border-[#2997FF] text-white bg-white/[0.02]"
+                  : "text-white/40 hover:text-white/70"
+              }`}
+            >
+              Edit Words
             </button>
           </div>
 
           {/* Sidebar Tab Content */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Tab 1: Built-in Templates */}
             {activeTab === "templates" && (
               <div className="space-y-3">
                 {CAPTION_THEMES.map((t) => {
@@ -320,16 +332,16 @@ export function Studio() {
                         <p
                           className="text-[17px] font-extrabold tracking-tight"
                           style={{
-                            color: t.accent,
+                            color: accent,
                             fontFamily:
                               t.id === "clean" || t.id === "highlight"
                                 ? "var(--font-display)"
                                 : "var(--font-creative)",
                             textShadow:
-                              t.id === "neon" ? `0 0 10px ${t.accent}, 0 0 22px ${t.accent}` : undefined,
+                              t.id === "neon" ? `0 0 10px ${accent}, 0 0 22px ${accent}` : undefined,
                           }}
                         >
-                          the quick <span style={{ color: t.accent }}>BROWN</span>
+                          the quick <span style={{ color: accent }}>BROWN</span>
                         </p>
                       </div>
                     </button>
@@ -338,36 +350,81 @@ export function Studio() {
               </div>
             )}
 
+            {/* Tab 2: Style, Colors & Position Controls */}
             {activeTab === "settings" && (
               <div className="space-y-5">
                 {/* Accent Color Picker */}
                 <div>
-                  <label className="text-[11px] font-bold uppercase tracking-wider text-white/40 block mb-2">
-                    Accent Color
-                  </label>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-white/40">
+                      Accent Color
+                    </label>
+                    {customAccentColor && (
+                      <button
+                        onClick={() => setCustomAccentColor(null)}
+                        className="text-[10px] font-medium text-[#2997FF] hover:underline"
+                      >
+                        Reset Color
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
                     {PRESET_COLORS.map((c) => (
                       <button
                         key={c}
                         onClick={() => setCustomAccentColor(c)}
-                        className={`h-8 w-8 rounded-full border-2 transition-transform ${
+                        className={`h-7 w-7 rounded-full border-2 transition-transform ${
                           accent === c ? "scale-110 border-white shadow-lg" : "border-transparent opacity-80 hover:opacity-100"
                         }`}
                         style={{ background: c }}
                       />
                     ))}
-                    {customAccentColor && (
-                      <button
-                        onClick={() => setCustomAccentColor(null)}
-                        className="rounded-full border border-white/20 px-2 text-[10px] text-white/50 hover:text-white"
-                      >
-                        Reset
-                      </button>
-                    )}
+                    {/* Custom Color Input */}
+                    <label
+                      className="h-7 w-7 rounded-full border border-white/20 flex items-center justify-center cursor-pointer overflow-hidden bg-white/[0.06] hover:bg-white/[0.12]"
+                      title="Pick Custom Color"
+                    >
+                      <input
+                        type="color"
+                        value={accent}
+                        onChange={(e) => setCustomAccentColor(e.target.value)}
+                        className="opacity-0 w-0 h-0"
+                      />
+                      <span className="text-[14px] font-bold text-white/80">+</span>
+                    </label>
                   </div>
                 </div>
 
-                {/* Caption Scale */}
+                {/* Recently Used Colors Batch (Apple Style) */}
+                {recentColors.length > 0 && (
+                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-white/40">
+                        Recently Used
+                      </span>
+                      <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] font-mono text-white/40">
+                        {recentColors.length} saved
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {recentColors.map((c, i) => (
+                        <button
+                          key={`${c}-${i}`}
+                          onClick={() => setCustomAccentColor(c)}
+                          className={`h-7 w-7 rounded-full border-2 transition-transform duration-150 ${
+                            accent.toLowerCase() === c.toLowerCase()
+                              ? "scale-110 border-white shadow-lg ring-2 ring-[#2997FF]"
+                              : "border-white/10 opacity-80 hover:opacity-100 hover:scale-105"
+                          }`}
+                          style={{ background: c }}
+                          title={c}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Caption Scale Slider */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-white/40">
@@ -385,25 +442,37 @@ export function Studio() {
                     className="w-full accent-[#2997FF]"
                   />
                 </div>
+              </div>
+            )}
 
-                {/* Position Coordinates */}
-                <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 space-y-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-white/40 block">
-                    Transform Box Position
+            {/* Tab 3: Manual Word Transcript Correction */}
+            {activeTab === "transcript" && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-white/40">
+                    Transcribed Words ({words.length})
                   </span>
-                  <div className="grid grid-cols-2 gap-2 text-[12px] font-mono text-white/70">
-                    <div className="rounded-lg bg-black/40 p-2">X: {captionPosition.x}%</div>
-                    <div className="rounded-lg bg-black/40 p-2">Y: {captionPosition.y}%</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setCaptionPosition({ x: 50, y: 80 });
-                      setCaptionScale(1.0);
-                    }}
-                    className="w-full mt-1 rounded-lg border border-white/10 bg-white/[0.04] py-1.5 text-[11px] text-white/70 hover:bg-white/[0.08]"
-                  >
-                    Reset Position & Scale
-                  </button>
+                  <span className="text-[10px] text-white/30">
+                    Click word to edit
+                  </span>
+                </div>
+                <div className="space-y-1.5 max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
+                  {words.map((w, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-1.5 transition-colors hover:border-white/15"
+                    >
+                      <span className="w-11 shrink-0 text-[10px] font-mono text-white/40">
+                        {w.start.toFixed(1)}s
+                      </span>
+                      <input
+                        type="text"
+                        value={w.word}
+                        onChange={(e) => updateWord(index, e.target.value)}
+                        className="flex-1 rounded-lg border border-white/[0.08] bg-black/40 px-2.5 py-1 text-[13px] font-medium text-white outline-none focus:border-[#2997FF]"
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

@@ -7,7 +7,6 @@ import { useApp } from "@/lib/store";
 interface CaptionTransformBoxProps {
   containerWidth: number;
   containerHeight: number;
-  activeText?: string;
 }
 
 export function CaptionTransformBox({
@@ -17,6 +16,7 @@ export function CaptionTransformBox({
   const { captionPosition, setCaptionPosition, captionScale, setCaptionScale } =
     useApp();
 
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasElRef = useRef<HTMLCanvasElement | null>(null);
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
   const activeObjRef = useRef<fabric.Rect | null>(null);
@@ -40,10 +40,10 @@ export function CaptionTransformBox({
     const initialTop = (captionPosition.y / 100) * containerHeight;
 
     // Box dimensions
-    const boxW = Math.min(containerWidth * 0.75, 300);
-    const boxH = 48;
+    const boxW = Math.min(containerWidth * 0.75, 320);
+    const boxH = 50;
 
-    // Create styled transform box rect representing captions
+    // Create clean styled transform box rect representing captions
     const rect = new fabric.Rect({
       left: initialLeft,
       top: initialTop,
@@ -51,18 +51,17 @@ export function CaptionTransformBox({
       height: boxH,
       originX: "center",
       originY: "center",
-      fill: "rgba(41, 151, 255, 0.08)",
+      fill: "transparent",
       stroke: "#2997FF",
       strokeWidth: 1.5,
-      strokeDashArray: [4, 4],
-      rx: 10,
-      ry: 10,
+      rx: 8,
+      ry: 8,
       cornerColor: "#2997FF",
       cornerStrokeColor: "#ffffff",
       cornerStyle: "circle",
       cornerSize: 10,
       transparentCorners: false,
-      padding: 6,
+      padding: 4,
       scaleX: captionScale,
       scaleY: captionScale,
       hasBorders: true,
@@ -101,7 +100,51 @@ export function CaptionTransformBox({
     canvas.on("object:moving", handleModified);
     canvas.on("object:scaling", handleModified);
 
+    // Smart pointer-events toggling: only intercept mouse when hovering near transform box
+    let isDragging = false;
+    canvas.on("mouse:down", () => {
+      isDragging = true;
+    });
+    canvas.on("mouse:up", () => {
+      isDragging = false;
+    });
+
+    const handleWindowMouseMove = (e: MouseEvent) => {
+      const container = containerRef.current;
+      const obj = activeObjRef.current;
+      if (!container || !obj) return;
+
+      if (isDragging) {
+        container.style.pointerEvents = "auto";
+        return;
+      }
+
+      const rect = container.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      // Always pass pointer events through to Remotion controls in bottom 50px area
+      if (mouseY > containerHeight - 50) {
+        container.style.pointerEvents = "none";
+        return;
+      }
+
+      const bound = obj.getBoundingRect();
+      const margin = 15;
+
+      const isOverBox =
+        mouseX >= bound.left - margin &&
+        mouseX <= bound.left + bound.width + margin &&
+        mouseY >= bound.top - margin &&
+        mouseY <= bound.top + bound.height + margin;
+
+      container.style.pointerEvents = isOverBox ? "auto" : "none";
+    };
+
+    window.addEventListener("mousemove", handleWindowMouseMove);
+
     return () => {
+      window.removeEventListener("mousemove", handleWindowMouseMove);
       canvas.off("object:modified", handleModified);
       canvas.off("object:moving", handleModified);
       canvas.off("object:scaling", handleModified);
@@ -149,7 +192,8 @@ export function CaptionTransformBox({
 
   return (
     <div
-      className="absolute inset-0 pointer-events-auto z-20"
+      ref={containerRef}
+      className="absolute inset-0 pointer-events-none z-20"
       style={{ width: containerWidth, height: containerHeight }}
     >
       <canvas ref={canvasElRef} className="absolute inset-0" />
