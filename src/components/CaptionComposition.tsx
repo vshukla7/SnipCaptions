@@ -7,7 +7,7 @@ import {
   interpolate,
   spring,
 } from "remotion";
-import type { CaptionThemeId, Word } from "@/lib/types";
+import type { CaptionPosition, CaptionThemeId, Word } from "@/lib/types";
 
 export interface CaptionCompositionProps {
   src: string;
@@ -15,6 +15,8 @@ export interface CaptionCompositionProps {
   theme: CaptionThemeId;
   accentColor: string;
   maxWordsPerLine?: number;
+  position?: CaptionPosition;
+  scale?: number;
 }
 
 interface Line {
@@ -59,6 +61,8 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
   theme,
   accentColor,
   maxWordsPerLine = 3,
+  position = { x: 50, y: 80 },
+  scale = 1.0,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width } = useVideoConfig();
@@ -244,15 +248,21 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
         src={src}
         style={{ width: "100%", height: "100%", objectFit: "contain" }}
       />
-      <AbsoluteFill
+      <div
         style={{
-          justifyContent: "flex-end",
+          position: "absolute",
+          left: `${position.x}%`,
+          top: `${position.y}%`,
+          transform: `translate(-50%, -50%) scale(${scale})`,
+          width: "90%",
+          display: "flex",
+          justifyContent: "center",
           alignItems: "center",
-          paddingBottom: Math.round(width * 0.12),
+          pointerEvents: "none",
         }}
       >
         {captionContent}
-      </AbsoluteFill>
+      </div>
     </AbsoluteFill>
   );
 };

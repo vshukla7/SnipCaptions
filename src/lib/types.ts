@@ -1,5 +1,10 @@
 export type CaptionThemeId = "neon" | "kinetic" | "clean" | "highlight";
 
+export interface CaptionPosition {
+  x: number; // percentage 0 - 100
+  y: number; // percentage 0 - 100
+}
+
 export interface Word {
   word: string;
   start: number;
@@ -68,8 +73,22 @@ export const CAPTION_THEMES: CaptionThemeMeta[] = [
 ];
 
 export const LANGUAGES: { code: string; label: string }[] = [
+  { code: "hi-Latn", label: "Hinglish (Latin script)" },
+  { code: "hi", label: "Hindi (हिंदी)" },
+  { code: "bn", label: "Bengali (বাংলা)" },
+  { code: "mr", label: "Marathi (मराठी)" },
+  { code: "te", label: "Telugu (తెలుగు)" },
+  { code: "ta", label: "Tamil (தமிழ்)" },
+  { code: "gu", label: "Gujarati (ગુજરાતી)" },
+  { code: "kn", label: "Kannada (ಕನ್ನಡ)" },
+  { code: "ml", label: "Malayalam (മലയാളം)" },
+  { code: "pa", label: "Punjabi (ਪੰਜਾਬੀ)" },
+  { code: "or", label: "Odia (ଓଡ଼ିଆ)" },
+  { code: "as", label: "Assamese (অসমীয়া)" },
+  { code: "ur", label: "Urdu (اردو)" },
+  { code: "bho", label: "Bhojpuri (भोजपुरी)" },
+  { code: "sa", label: "Sanskrit (संस्कृतम्)" },
   { code: "en", label: "English" },
-  { code: "hi", label: "Hinglish / Hindi" },
   { code: "es", label: "Spanish" },
   { code: "fr", label: "French" },
   { code: "de", label: "German" },

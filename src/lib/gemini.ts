@@ -24,9 +24,36 @@ const TRANSCRIPTION_SCHEMA = {
   required: ["language", "text", "words"],
 } as const;
 
-const PROMPT = (language: string) => `You are a speech-to-text engine for short-form video.
+const PROMPT = (language: string) => {
+  let langInstruction = `Language preference: ${language}.`;
+  if (language === "hi-Latn" || language === "hinglish") {
+    langInstruction = `Language preference: Hinglish (Hindi spoken language transcribed strictly using the Roman / English alphabet, e.g. "kya haal hai", "kaise ho aap").
+CRITICAL SCRIPT RULE: Transcribe ALL words using Latin/English characters (Hinglish). DO NOT output Devanagari characters.`;
+  } else if (language === "hi" || language === "hindi") {
+    langInstruction = `Language preference: Hindi (Devanagari script, e.g. "क्या हाल है"). Transcribe all words using native Devanagari script.`;
+  } else if (language === "bn") {
+    langInstruction = `Language preference: Bengali (বাংলা script). Transcribe in native Bengali script.`;
+  } else if (language === "mr") {
+    langInstruction = `Language preference: Marathi (मराठी script). Transcribe in native Marathi Devanagari script.`;
+  } else if (language === "te") {
+    langInstruction = `Language preference: Telugu (తెలుగు script). Transcribe in native Telugu script.`;
+  } else if (language === "ta") {
+    langInstruction = `Language preference: Tamil (தமிழ் script). Transcribe in native Tamil script.`;
+  } else if (language === "gu") {
+    langInstruction = `Language preference: Gujarati (ગુજરાતી script). Transcribe in native Gujarati script.`;
+  } else if (language === "kn") {
+    langInstruction = `Language preference: Kannada (ಕನ್ನಡ script). Transcribe in native Kannada script.`;
+  } else if (language === "ml") {
+    langInstruction = `Language preference: Malayalam (മലയാളം script). Transcribe in native Malayalam script.`;
+  } else if (language === "pa") {
+    langInstruction = `Language preference: Punjabi (ਪੰਜਾਬੀ script). Transcribe in native Gurmukhi Punjabi script.`;
+  } else if (language === "ur") {
+    langInstruction = `Language preference: Urdu (اردو script). Transcribe in native Urdu script.`;
+  }
+
+  return `You are a speech-to-text engine for short-form video.
 Transcribe ALL spoken audio from the provided media file.
-Language preference: ${language}.
+${langInstruction}
 
 Requirements:
 - Return word-level timestamps in SECONDS with at least 2 decimals.
@@ -34,6 +61,7 @@ Requirements:
 - Keep punctuation attached to the correct word (e.g. "word,").
 - If multiple speakers, still list every word in order.
 - Output ONLY the JSON object described by the schema. Do not wrap it in markdown.`;
+};
 
 export async function validateApiKey(apiKey: string): Promise<boolean> {
   try {

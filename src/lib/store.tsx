@@ -12,6 +12,7 @@ import {
 } from "react";
 import type {
   AppStatus,
+  CaptionPosition,
   CaptionThemeId,
   TranscriptionResult,
   Word,
@@ -32,6 +33,15 @@ interface AppContextValue {
 
   captionTheme: CaptionThemeId;
   setCaptionTheme: (t: CaptionThemeId) => void;
+
+  captionPosition: CaptionPosition;
+  setCaptionPosition: (p: CaptionPosition | ((prev: CaptionPosition) => CaptionPosition)) => void;
+
+  captionScale: number;
+  setCaptionScale: (s: number | ((prev: number) => number)) => void;
+
+  customAccentColor: string | null;
+  setCustomAccentColor: (c: string | null) => void;
 
   words: Word[];
   transcription: TranscriptionResult | null;
@@ -62,6 +72,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [language, setLanguageState] = useState("auto");
   const [captionTheme, setCaptionThemeState] = useState<CaptionThemeId>("clean");
+  const [captionPosition, setCaptionPosition] = useState<CaptionPosition>({ x: 50, y: 80 });
+  const [captionScale, setCaptionScale] = useState<number>(1.0);
+  const [customAccentColor, setCustomAccentColor] = useState<string | null>(null);
   const [transcription, setTranscription] =
     useState<TranscriptionResult | null>(null);
   const [status, setStatus] = useState<AppStatus>("idle");
@@ -185,6 +198,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setLanguage,
     captionTheme,
     setCaptionTheme,
+    captionPosition,
+    setCaptionPosition,
+    captionScale,
+    setCaptionScale,
+    customAccentColor,
+    setCustomAccentColor,
     words,
     transcription,
     durationInSeconds,
