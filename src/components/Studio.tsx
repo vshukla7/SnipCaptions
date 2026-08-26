@@ -5,7 +5,6 @@ import { Player, PlayerRef } from "@remotion/player";
 import { useApp } from "@/lib/store";
 import { CAPTION_THEMES } from "@/lib/types";
 import { CaptionComposition } from "./CaptionComposition";
-import { CaptionTransformBox } from "./CaptionTransformBox";
 
 const FPS = 30;
 
@@ -93,7 +92,7 @@ function FontDropdown({ value, onChange }: { value: string | null; onChange: (v:
       </button>
 
       {open && (
-        <div className="absolute left-0 right-0 z-30 mt-1.5 origin-top overflow-hidden rounded-2xl border border-white/10 bg-[#1c1c1e]/90 shadow-2xl shadow-black/60 backdrop-blur-2xl anim-fade-in-scale">
+        <div className="absolute left-0 right-0 z-30 mt-1.5 origin-top overflow-hidden rounded-2xl border border-white/10 bg-[#1c1c1e]/90 shadow-2xl shadow-black/60 backdrop-blur-2xl">
           <div className="max-h-64 overflow-y-auto p-1.5">
             {FONTS.map((f) => {
               const active = f.value === value;
@@ -362,6 +361,50 @@ export function Studio() {
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<PlayerRef>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const padRef = useRef<HTMLDivElement | null>(null);
+
+  const handlePadPointer = (clientX: number, clientY: number) => {
+    const pad = padRef.current;
+    if (!pad) return;
+
+    const rect = pad.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+
+    const pctX = Math.max(5, Math.min(95, (x / rect.width) * 100));
+    const pctY = Math.max(5, Math.min(95, (y / rect.height) * 100));
+
+    setCaptionPosition({
+      x: Math.round(pctX * 10) / 10,
+      y: Math.round(pctY * 10) / 10,
+    });
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    handlePadPointer(e.clientX, e.clientY);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      handlePadPointer(e.clientX, e.clientY);
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+
+  const padAspect = naturalAspect || 0.5625; // Default to 9:16 portrait
+  let padWidth = 200;
+  let padHeight = 200;
+  if (padAspect > 1) {
+    padWidth = 220;
+    padHeight = Math.round(220 / padAspect);
+  } else {
+    padHeight = 220;
+    padWidth = Math.round(220 * padAspect);
+  }
 
   // Monitor play/pause status of the Remotion Player
   useEffect(() => {
@@ -395,6 +438,10 @@ export function Studio() {
 
   const durationInFrames = Math.max(1, Math.round(durationInSeconds * FPS));
   const ready = Boolean(videoUrl) || words.length > 0;
+
+  // Render dimensions must be multiples of 2 (even numbers) for H.264 WebCodecs
+  const compWidth = naturalAspect && naturalAspect > 1 ? 1920 : 1080;
+  const compHeight = naturalAspect && naturalAspect > 1 ? Math.round(Math.round(1920 / naturalAspect) / 2) * 2 : 1920;
 
   // Auto detect natural aspect ratio when video URL is present
   useEffect(() => {
@@ -436,8 +483,8 @@ export function Studio() {
       const { renderMediaOnWeb } = await import("@remotion/web-renderer");
       const controller = new AbortController();
 
-      const aspectW = naturalAspect && naturalAspect > 1 ? 1920 : 1080;
-      const aspectH = naturalAspect && naturalAspect > 1 ? Math.round(1920 / naturalAspect) : 1920;
+      const aspectW = compWidth;
+      const aspectH = compHeight;
 
       const { getBlob } = await renderMediaOnWeb({
         composition: {
@@ -531,37 +578,40 @@ export function Studio() {
   return (
     <div className="flex h-[calc(100vh-108px)] w-full flex-col overflow-hidden bg-[#0A0A0C]">
       {/* Studio Header Toolbar */}
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#121214] px-5">
+      <div className="flex h-12 shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#121214] px-4 sm:px-5">
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-semibold text-white/90">
-            Video Studio
+            <span className="hidden sm:inline">Video </span>Studio
           </span>
           {naturalAspect && (
-            <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[10px] font-mono text-white/50">
+            <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[10px] font-mono text-white/50 hidden xs:inline sm:inline">
               {naturalAspect > 1 ? "16:9 Landscape" : naturalAspect < 0.9 ? "9:16 Portrait" : "1:1 Square"}
             </span>
           )}
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={downloadSRT}
             disabled={!ready || words.length === 0}
-            className="flex items-center gap-2 rounded-xl bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.12] px-3.5 py-1.5 text-[13px] font-semibold text-white/90 transition-all disabled:opacity-40"
+            title="Download SRT Subtitles"
+            className="flex items-center gap-1.5 rounded-xl bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.12] px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 text-[13px] font-semibold text-white/90 transition-all disabled:opacity-40"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-            <span>Download SRT</span>
+            <span className="hidden sm:inline">Download SRT</span>
+            <span className="sm:hidden">SRT</span>
           </button>
 
           <button
             onClick={handleExport}
             disabled={exporting || !ready}
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#2997FF] to-[#0066CC] px-4 py-1.5 text-[13px] font-semibold text-white shadow-lg shadow-[#2997FF]/25 transition-all disabled:opacity-40"
+            title="Export Video with Captions"
+            className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#2997FF] to-[#0066CC] px-3 py-1.5 sm:px-4 sm:py-1.5 text-[13px] font-semibold text-white shadow-lg shadow-[#2997FF]/25 transition-all disabled:opacity-40"
           >
             {exporting ? (
               <>
@@ -578,7 +628,8 @@ export function Studio() {
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                <span>Export Video</span>
+                <span className="hidden sm:inline">Export Video</span>
+                <span className="sm:hidden">Export</span>
               </>
             )}
           </button>
@@ -586,7 +637,7 @@ export function Studio() {
       </div>
 
       {/* Main Studio View (Remotion Player + Right Sidebar) */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
         {/* Left: Player Viewport */}
         <div className="flex flex-1 flex-col overflow-hidden bg-black/60">
           <div className="flex flex-1 items-center justify-center p-3 sm:p-5 min-h-0 min-w-0">
@@ -612,8 +663,8 @@ export function Studio() {
                   }}
                   durationInFrames={durationInFrames}
                   fps={FPS}
-                  compositionWidth={naturalAspect && naturalAspect > 1 ? 1920 : 1080}
-                  compositionHeight={naturalAspect && naturalAspect > 1 ? Math.round(1920 / naturalAspect) : 1920}
+                  compositionWidth={compWidth}
+                  compositionHeight={compHeight}
                   controls
                   loop
                   style={{
@@ -622,12 +673,30 @@ export function Studio() {
                   }}
                 />
 
-                {/* Fabric.js TransformBox Overlay (Only active when paused) */}
-                {playerDims.width > 0 && playerDims.height > 0 && !isPlaying && (
-                  <CaptionTransformBox
-                    containerWidth={playerDims.width}
-                    containerHeight={playerDims.height}
-                  />
+                {/* Invisible clickable captions hotspot (Active both playing and paused) */}
+                {playerDims.width > 0 && playerDims.height > 0 && (
+                  <div
+                    className="absolute inset-0 z-20 pointer-events-none"
+                    style={{ height: playerDims.height - 50 }}
+                  >
+                    <div
+                      onClick={() => {
+                        if (playerRef.current?.isPlaying()) {
+                          playerRef.current.pause();
+                        }
+                        setActiveTab("settings");
+                      }}
+                      className="absolute cursor-pointer pointer-events-auto"
+                      style={{
+                        left: `${captionPosition.x}%`,
+                        top: `${captionPosition.y}%`,
+                        transform: `translate(-50%, -50%) scale(${captionScale})`,
+                        width: "80%",
+                        maxWidth: "340px",
+                        height: "64px",
+                      }}
+                    />
+                  </div>
                 )}
               </div>
             ) : (
@@ -643,7 +712,7 @@ export function Studio() {
         </div>
 
         {/* Right: Studio Sidebar (3 Tabs: Templates, Style & Position, Transcript) */}
-        <div className="w-[320px] shrink-0 border-l border-white/[0.06] bg-[#121214] flex flex-col">
+        <div className="w-full md:w-[320px] h-[320px] md:h-full shrink-0 border-t md:border-t-0 md:border-l border-white/[0.06] bg-[#121214] flex flex-col">
           {/* Tabs */}
           <div className="flex border-b border-white/[0.06] bg-black/20">
             <button
@@ -874,6 +943,62 @@ export function Studio() {
                     onChange={(e) => setCaptionScale(parseFloat(e.target.value))}
                     className="w-full accent-[#2997FF]"
                   />
+                </div>
+
+                {/* Inline Caption Position Pad */}
+                <div className="space-y-2 pt-2 border-t border-white/[0.04]">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-white/40">
+                      Position Pad
+                    </label>
+                    <span className="text-[10px] text-white/30">Drag handle or tap pad</span>
+                  </div>
+                  
+                  <div className="flex justify-center items-center py-3 bg-black/40 rounded-2xl border border-white/[0.04]">
+                    <div
+                      ref={padRef}
+                      onPointerDown={handlePointerDown}
+                      onPointerMove={handlePointerMove}
+                      onPointerUp={handlePointerUp}
+                      className="relative bg-[#1a1a1e] bg-[radial-gradient(rgba(255,255,255,0.05)_1px,transparent_1px)] bg-[size:14px_14px] border border-white/10 rounded-2xl cursor-crosshair overflow-hidden touch-none select-none"
+                      style={{
+                        width: padWidth,
+                        height: padHeight,
+                      }}
+                    >
+                      {/* Grid lines */}
+                      <div className="absolute inset-x-0 top-1/2 border-t border-white/[0.03] pointer-events-none" />
+                      <div className="absolute inset-y-0 left-1/2 border-l border-white/[0.03] pointer-events-none" />
+
+                      {/* Subtitle Representation Box */}
+                      <div
+                        className="absolute bg-[#2997FF] text-white text-[8px] font-extrabold px-2 py-0.5 rounded shadow-md pointer-events-none whitespace-nowrap select-none border border-white/20 uppercase tracking-wide"
+                        style={{
+                          left: `${captionPosition.x}%`,
+                          top: `${captionPosition.y}%`,
+                          transform: `translate(-50%, -50%) scale(${Math.min(1.5, captionScale)})`,
+                        }}
+                      >
+                        Sub
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick Align buttons */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setCaptionPosition({ x: 50, y: captionPosition.y })}
+                      className="flex-1 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-[10px] font-semibold text-white/70 hover:text-white transition-colors"
+                    >
+                      Center X
+                    </button>
+                    <button
+                      onClick={() => setCaptionPosition({ x: captionPosition.x, y: 80 })}
+                      className="flex-1 py-1.5 rounded-xl bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-[10px] font-semibold text-white/70 hover:text-white transition-colors"
+                    >
+                      Align Bottom
+                    </button>
+                  </div>
                 </div>
               </div>
             )}

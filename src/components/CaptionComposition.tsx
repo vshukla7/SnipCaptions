@@ -1,10 +1,10 @@
 import React, { useMemo } from "react";
 import {
   AbsoluteFill,
-  Video,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { Video } from "@remotion/media";
 import type { CaptionPosition, CaptionThemeId, Word } from "@/lib/types";
 
 // Import separate template components

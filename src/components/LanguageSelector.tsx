@@ -53,10 +53,6 @@ export function LanguageSelector() {
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.15 }}
             className="absolute right-0 top-full z-50 mt-2 max-h-60 w-64 overflow-y-auto rounded-xl border border-white/[0.1] bg-[#1C1C1E] p-1.5 shadow-2xl"
           >
             {LANGUAGES.map((l) => {

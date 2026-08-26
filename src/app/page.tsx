@@ -126,22 +126,9 @@ export default function Home() {
                 {busy ? "Transcribing…" : "Generate Captions"}
               </button>
 
-              <button
-                type="button"
-                onClick={openDemoStudio}
-                className="w-full rounded-xl border border-white/[0.08] bg-white/[0.03] py-2.5 text-[13px] font-medium text-[#2997FF] transition-colors hover:bg-white/[0.06]"
-              >
-                Open Studio Preview (Demo)
-              </button>
-
               {!hasApiKey && (
                 <p className="text-center text-[12px] text-white/40">
                   Add your Gemini API key in top right to begin
-                </p>
-              )}
-              {!videoFile && (
-                <p className="text-center text-[12px] text-white/40">
-                  Upload a video above to get started
                 </p>
               )}
             </div>
