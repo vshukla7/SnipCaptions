@@ -6,7 +6,10 @@ export type CaptionThemeId =
   | "snipcap_special"
   | "black_punch"
   | "liquid_glass"
-  | "one_word";
+  | "one_word"
+  | "yellow_script"
+  | "kinetic_01"
+  | "dual_line_glow";
 
 export interface CaptionPosition {
   x: number; // percentage 0 - 100
@@ -108,6 +111,30 @@ export const CAPTION_THEMES: CaptionThemeMeta[] = [
     description: "Display only the currently spoken word, with zero animations.",
     fontClass: "font-display",
     accent: "#ffd60a",
+    wordByWord: true,
+  },
+  {
+    id: "yellow_script",
+    name: "Yellow Script",
+    description: "Cursive accent top line + heavy bold bottom line. Reels/Shorts style.",
+    fontClass: "font-display",
+    accent: "#FFDC00",
+    wordByWord: true,
+  },
+  {
+    id: "kinetic_01",
+    name: "Kinetic 01",
+    description: "Main word big centered, side words float in cursive around it. Scene-based.",
+    fontClass: "font-creative",
+    accent: "#FFD60A",
+    wordByWord: true,
+  },
+  {
+    id: "dual_line_glow",
+    name: "Dual Line Glow",
+    description: "Bold uppercase top with warm glow reveal + cursive slide-up bottom. Cinema style.",
+    fontClass: "font-creative",
+    accent: "#FFB800",
     wordByWord: true,
   },
 ];

@@ -120,7 +120,7 @@ export const YellowScriptCaption: React.FC<YellowScriptCaptionProps> = ({
           style={{
             fontFamily: config.topLineFont,
             fontSize: fontSize * 0.95,
-            color: config.topLineColor,
+            color: config.bottomLineColor,
             textShadow: dropShadow,
             display: "flex",
             flexWrap: "wrap",
@@ -136,8 +136,7 @@ export const YellowScriptCaption: React.FC<YellowScriptCaptionProps> = ({
                 style={{
                   margin: "0 0.16em",
                   textTransform: "lowercase",
-                  // Cursive accent active highlight: slight glow
-                  color: isCurrent ? "#FFFFFF" : config.topLineColor,
+                  color: isCurrent ? config.topLineColor : config.bottomLineColor,
                   fontWeight: 400,
                   transition: "color 0.1s ease",
                 }}
@@ -172,7 +171,7 @@ export const YellowScriptCaption: React.FC<YellowScriptCaptionProps> = ({
                 style={{
                   margin: "0 0.18em",
                   textTransform: "uppercase",
-                  color: isCurrent ? config.highlightColor : config.bottomLineColor,
+                  color: isCurrent ? config.topLineColor : config.bottomLineColor,
                   transition: "color 0.1s ease",
                 }}
               >

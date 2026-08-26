@@ -16,6 +16,9 @@ import { SnipcapSpecialTemplate } from "./templates/SnipcapSpecialTemplate";
 import { BlackPunchTemplate } from "./templates/BlackPunchTemplate";
 import { LiquidGlassTemplate } from "./templates/LiquidGlassTemplate";
 import { OneWordTemplate } from "./templates/OneWordTemplate";
+import { YellowScriptCaption } from "./templates/YellowScriptCaption";
+import { Kinetic01Template } from "./templates/Kinetic01Template";
+import { DualLineGlowTemplate } from "./templates/DualLineGlowTemplate";
 
 export interface CaptionCompositionProps {
   src: string;
@@ -65,6 +68,9 @@ const FONT_FOR_THEME: Record<CaptionThemeId, string> = {
   black_punch: '"Helvetica Bold", "Impact", sans-serif',
   liquid_glass: '"Readex Pro", "Montserrat", sans-serif',
   one_word: '"SF Pro Display", "Inter", sans-serif',
+  yellow_script: '"SF Pro Display", "Inter", sans-serif',
+  kinetic_01: '"Gilroy", "Helvetica Neue", sans-serif',
+  dual_line_glow: '"Gilroy", "Helvetica Neue", sans-serif',
 };
 
 export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
@@ -170,6 +176,46 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
     captionContent = <LiquidGlassTemplate {...templateProps} />;
   } else if (theme === "one_word") {
     captionContent = <OneWordTemplate {...templateProps} />;
+  } else if (theme === "yellow_script") {
+    // YellowScriptCaption handles its own absolute positioning internally
+    return (
+      <AbsoluteFill style={{ backgroundColor: "#000000" }}>
+        {Boolean(src && src.trim()) ? (
+          <Video
+            src={src}
+            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          />
+        ) : (
+          <AbsoluteFill style={{ backgroundColor: "#121214", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <div style={{ color: "rgba(255,255,255,0.3)", fontFamily: "sans-serif", fontSize: 24, textAlign: "center" }}>
+              Studio Demo Preview Mode
+            </div>
+          </AbsoluteFill>
+        )}
+        <YellowScriptCaption
+          words={words}
+          activeLine={activeLine}
+          time={time}
+          frame={frame}
+          fps={fps}
+          width={width}
+          height={0}
+          config={{
+            placementY: position.y,
+            topLineFont: '"Celosia Nature", "Caveat", "Kalam", cursive',
+            topLineColor: accentColor || "#FFDC00",
+            bottomLineFont: '"Gilroy", "SF Pro Display", sans-serif',
+            bottomLineColor: "#FFFFFF",
+            highlightColor: "#FF1E1E",
+            spring: { mass: 0.5, damping: 12, stiffness: 200 },
+          }}
+        />
+      </AbsoluteFill>
+    );
+  } else if (theme === "kinetic_01") {
+    captionContent = <Kinetic01Template {...templateProps} />;
+  } else if (theme === "dual_line_glow") {
+    captionContent = <DualLineGlowTemplate {...templateProps} />;
   }
 
   return (
@@ -180,10 +226,24 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
           style={{ width: "100%", height: "100%", objectFit: "contain" }}
         />
       ) : (
-        <AbsoluteFill style={{ backgroundColor: "#121214", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ color: "rgba(255,255,255,0.3)", fontFamily: "sans-serif", fontSize: 24, textAlign: "center" }}>
-            Studio Demo Preview Mode
-          </div>
+        <AbsoluteFill
+          style={{
+            background: "radial-gradient(ellipse at 50% 80%, #1a1a2e 0%, #0d0d12 60%, #000000 100%)",
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            paddingBottom: "8%",
+          }}
+        >
+          {/* Subtle noise texture via repeating gradient */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background: "repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px)",
+              pointerEvents: "none",
+            }}
+          />
         </AbsoluteFill>
       )}
       <div

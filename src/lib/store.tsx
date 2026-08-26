@@ -216,27 +216,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const openDemoStudio = useCallback(() => {
     const dummyWords: Word[] = [
-      { word: "A", start: 0.2, end: 0.6 },
-      { word: "quick", start: 0.65, end: 1.1 },
-      { word: "brown", start: 1.15, end: 1.7 },
-      { word: "fox", start: 1.75, end: 2.2 },
-      { word: "jumps", start: 2.25, end: 2.8 },
-      { word: "over", start: 2.85, end: 3.3 },
-      { word: "the", start: 3.35, end: 3.7 },
-      { word: "lazy", start: 3.75, end: 4.3 },
-      { word: "dog", start: 4.35, end: 4.9 },
-      { word: "always", start: 4.95, end: 5.5 },
-      { word: "on", start: 5.55, end: 5.9 },
-      { word: "the", start: 5.95, end: 6.3 },
-      { word: "video", start: 6.35, end: 7.0 },
+      { word: "the",    start: 0.10, end: 0.38 },
+      { word: "quick",  start: 0.42, end: 0.75 },
+      { word: "brown",  start: 0.78, end: 1.10 },
+      { word: "fox",    start: 1.14, end: 1.42 },
+      { word: "jumps",  start: 1.46, end: 1.80 },
+      { word: "over",   start: 1.84, end: 2.12 },
+      { word: "a",      start: 2.16, end: 2.32 },
+      { word: "lazy",   start: 2.36, end: 2.68 },
+      { word: "dog",    start: 2.72, end: 3.00 },
+      { word: "and",    start: 3.04, end: 3.22 },
+      { word: "then",   start: 3.26, end: 3.54 },
+      { word: "runs",   start: 3.58, end: 3.86 },
+      { word: "into",   start: 3.90, end: 4.16 },
+      { word: "the",    start: 4.20, end: 4.38 },
+      { word: "wild",   start: 4.42, end: 4.72 },
+      { word: "night",  start: 4.76, end: 5.10 },
+      { word: "again",  start: 5.14, end: 5.50 },
+      { word: "forever",start: 5.54, end: 6.00 },
     ];
     setTranscription({
       language: "en",
-      text: "A quick brown fox jumps over the lazy dog always on the video",
+      text: "the quick brown fox jumps over a lazy dog and then runs into the wild night again forever",
       words: dummyWords,
     });
-    setVideoUrl("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4");
-    setDurationInSeconds(15);
+    setVideoUrl(""); // No external video — CaptionComposition renders gradient placeholder
+    setDurationInSeconds(7);
     setStatus("ready");
     setError(null);
   }, []);

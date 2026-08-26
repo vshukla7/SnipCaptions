@@ -19,17 +19,313 @@ const PRESET_COLORS = [
   "#af52de",
 ];
 
-// Fallback dummy words for instant studio UI preview
+const FONTS = [
+  { name: "SF Pro Display", value: '"SF Pro Display", -apple-system, BlinkMacSystemFont, sans-serif', desc: "Clean & Apple" },
+  { name: "Gilroy ExtraBold", value: '"Gilroy", sans-serif', desc: "Modern & Punchy" },
+  { name: "Helvetica Rounded", value: '"Helvetica Rounded", sans-serif', desc: "Soft & Comic" },
+  { name: "Helvetica Bold", value: '"Helvetica Bold", sans-serif', desc: "Impact & Glow" },
+  { name: "Readex Pro", value: '"Readex Pro", sans-serif', desc: "Clean & Rounded" },
+  { name: "Celosia Nature", value: '"Celosia Nature", sans-serif', desc: "Elegant script" },
+  { name: "Longmile", value: '"Longmile", sans-serif', desc: "Bold Display" },
+  { name: "NCL Gasdrifo", value: '"NCL Gasdrifo", sans-serif', desc: "Distorted Creative" },
+  { name: "Retro Floral", value: '"Retro Floral", sans-serif', desc: "Decorative Retro" },
+  { name: "Qurova Light", value: '"Qurova Light", sans-serif', desc: "Premium Light serif" },
+];
+
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      className={`shrink-0 text-white/40 transition-transform duration-200 ${open ? "rotate-180" : ""}`}
+    >
+      <path d="M6 9l6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="shrink-0 text-[#2997FF]">
+      <path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function FontDropdown({ value, onChange }: { value: string | null; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const selected = FONTS.find((f) => f.value === value) ?? FONTS[0];
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3.5 py-2.5 text-left transition-colors hover:bg-white/[0.06]"
+      >
+        <span className="flex min-w-0 items-center gap-2.5">
+          <span className="truncate text-[15px] text-white" style={{ fontFamily: selected.value }}>
+            {selected.name}
+          </span>
+          <span className="truncate text-[11px] text-white/40">{selected.desc}</span>
+        </span>
+        <ChevronIcon open={open} />
+      </button>
+
+      {open && (
+        <div className="absolute left-0 right-0 z-30 mt-1.5 origin-top overflow-hidden rounded-2xl border border-white/10 bg-[#1c1c1e]/90 shadow-2xl shadow-black/60 backdrop-blur-2xl anim-fade-in-scale">
+          <div className="max-h-64 overflow-y-auto p-1.5">
+            {FONTS.map((f) => {
+              const active = f.value === value;
+              return (
+                <button
+                  key={f.name}
+                  type="button"
+                  onClick={() => {
+                    onChange(f.value);
+                    setOpen(false);
+                  }}
+                  className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition-colors ${
+                    active ? "bg-[#2997FF]/15" : "hover:bg-white/[0.06]"
+                  }`}
+                >
+                  <span className="flex min-w-0 flex-col">
+                    <span
+                      className={`truncate text-[15px] leading-tight ${active ? "text-white" : "text-white/90"}`}
+                      style={{ fontFamily: f.value }}
+                    >
+                      {f.name}
+                    </span>
+                    <span className="truncate text-[10px] text-white/40">{f.desc}</span>
+                  </span>
+                  {active && <CheckIcon />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Animated Preview Widget ──────────────────────────────────────────────────
+// Cycles through demo steps at 560 ms intervals so template cards feel live.
+// 6 steps: 0–5 so dual_line_glow can reveal 5 words + bottom row
+const PREVIEW_STEPS = 6;
+
+function AnimatedPreview({ themeId, accent }: { themeId: string; accent: string }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setActiveIdx((i) => (i + 1) % PREVIEW_STEPS), 560);
+    return () => clearInterval(id);
+  }, []);
+
+  if (themeId === "kinetic_01") {
+    return (
+      <div className="relative flex h-full w-full items-center justify-center overflow-hidden">
+        <span
+          className="absolute text-[9px] font-bold"
+          style={{
+            fontFamily: "cursive",
+            color: "rgba(255,255,255,0.55)",
+            top: "10%", left: "10%",
+            opacity: activeIdx >= 1 ? 1 : 0,
+            transform: activeIdx >= 1 ? "translateY(0px)" : "translateY(6px)",
+            transition: "opacity 0.3s ease, transform 0.3s ease",
+          }}
+        >
+          quick
+        </span>
+        <span
+          className="text-[18px] font-black uppercase"
+          style={{
+            color: accent,
+            textShadow: `0 0 10px ${accent}55`,
+            transform: `scale(${activeIdx === 1 ? 1.1 : 1})`,
+            transition: "transform 0.3s ease",
+          }}
+        >
+          BROWN
+        </span>
+        <span
+          className="absolute text-[9px] font-bold"
+          style={{
+            fontFamily: "cursive",
+            color: "rgba(255,255,255,0.55)",
+            bottom: "10%", right: "10%",
+            opacity: activeIdx === 2 ? 1 : 0,
+            transform: activeIdx === 2 ? "translateY(0px)" : "translateY(-6px)",
+            transition: "opacity 0.3s ease, transform 0.3s ease",
+          }}
+        >
+          fox
+        </span>
+      </div>
+    );
+  }
+
+  if (themeId === "snipcap_special") {
+    return (
+      <div className="text-center leading-none">
+        <div
+          className="text-[9px] lowercase transition-all duration-300"
+          style={{
+            fontFamily: "cursive",
+            color: activeIdx === 0 ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.3)",
+          }}
+        >
+          ha to aapne
+        </div>
+        <div
+          className="text-[15px] font-black uppercase my-0.5 transition-all duration-300"
+          style={{
+            color: accent,
+            textShadow: `0 0 8px ${accent}`,
+            filter: activeIdx === 1 ? "blur(0px)" : "blur(3px)",
+            opacity: activeIdx === 1 ? 1 : 0.35,
+            transform: activeIdx === 1 ? "scale(1.08)" : "scale(0.9)",
+          }}
+        >
+          ELON
+        </div>
+        <div
+          className="text-[8px] uppercase font-semibold tracking-wide transition-all duration-300"
+          style={{ color: activeIdx === 2 ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.15)" }}
+        >
+          kya kaha
+        </div>
+      </div>
+    );
+  }
+
+  if (themeId === "yellow_script") {
+    return (
+      <div className="text-center leading-none">
+        <div
+          className="text-[10px] lowercase transition-all duration-300"
+          style={{
+            fontFamily: "cursive",
+            color: activeIdx === 0 ? accent : "rgba(255,255,255,0.4)",
+          }}
+        >
+          the quick
+        </div>
+        <div
+          className="text-[15px] font-black uppercase my-0.5 transition-all duration-300"
+          style={{
+            color: activeIdx === 1 ? accent : "rgba(255,255,255,0.4)",
+            textShadow: activeIdx === 1 ? `0 0 8px ${accent}66` : "none",
+            transform: activeIdx === 1 ? "scale(1.05)" : "scale(1)",
+          }}
+        >
+          BROWN
+        </div>
+        <div
+          className="text-[8px] font-bold uppercase tracking-wide transition-all duration-300"
+          style={{ color: activeIdx === 2 ? accent : "rgba(255,255,255,0.4)" }}
+        >
+          fox jumps
+        </div>
+      </div>
+    );
+  }
+
+  if (themeId === "dual_line_glow") {
+    const topWords = ["EK", "CHEEZ", "SHURU", "SE", "LEKE"];
+    const botWords = ["Ab Tak", "Samjhata", "Chala"];
+    return (
+      <div className="text-center leading-none space-y-1 px-1 w-full">
+        {/* Top bold glow row — all always rendered, opacity cycles */}
+        <div className="flex gap-[3px] justify-center flex-wrap">
+          {topWords.map((w, i) => (
+            <span
+              key={w}
+              className="text-[10px] font-black uppercase"
+              style={{
+                fontFamily: '"NCL Gasdrifo", "Gilroy", sans-serif',
+                opacity: activeIdx >= i ? 1 : 0,
+                color: activeIdx === i ? accent : activeIdx > i ? "#ffffff" : "#ffffff",
+                textShadow: activeIdx === i
+                  ? `0 0 8px ${accent}, 0 0 18px ${accent}88`
+                  : activeIdx > i
+                  ? `0 0 3px ${accent}44`
+                  : "none",
+                transition: "opacity 0.25s ease, color 0.25s ease, text-shadow 0.25s ease",
+              }}
+            >
+              {w}
+            </span>
+          ))}
+        </div>
+        {/* Bottom cursive slide-up row */}
+        <div className="flex gap-[4px] justify-center flex-wrap">
+          {botWords.map((w, i) => (
+            <span
+              key={w}
+              className="text-[8px] font-medium"
+              style={{
+                fontFamily: "cursive",
+                color: "rgba(255,255,255,0.80)",
+                opacity: activeIdx >= topWords.length - 1 ? 1 : 0,
+                transform: activeIdx >= topWords.length - 1 ? "translateY(0px)" : "translateY(5px)",
+                transition: `opacity 0.3s ease ${i * 60}ms, transform 0.3s ease ${i * 60}ms`,
+              }}
+            >
+              {w}
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+const ANIMATED_THEMES = new Set(["kinetic_01", "snipcap_special", "yellow_script", "dual_line_glow"]);
+
+// Fallback dummy words for instant studio UI preview (18 words / ~9 s)
 const DUMMY_WORDS = [
-  { word: "the", start: 0.1, end: 0.4 },
-  { word: "quick", start: 0.45, end: 0.8 },
-  { word: "brown", start: 0.85, end: 1.2 },
-  { word: "fox", start: 1.25, end: 1.6 },
-  { word: "jumps", start: 1.65, end: 2.0 },
-  { word: "over", start: 2.05, end: 2.4 },
-  { word: "the", start: 2.45, end: 2.7 },
-  { word: "lazy", start: 2.75, end: 3.1 },
-  { word: "dog", start: 3.15, end: 3.6 },
+  { word: "the",    start: 0.10, end: 0.38 },
+  { word: "quick",  start: 0.42, end: 0.75 },
+  { word: "brown",  start: 0.78, end: 1.10 },
+  { word: "fox",    start: 1.14, end: 1.42 },
+  { word: "jumps",  start: 1.46, end: 1.80 },
+  { word: "over",   start: 1.84, end: 2.12 },
+  { word: "a",      start: 2.16, end: 2.32 },
+  { word: "lazy",   start: 2.36, end: 2.68 },
+  { word: "dog",    start: 2.72, end: 3.00 },
+  { word: "and",    start: 3.04, end: 3.22 },
+  { word: "then",   start: 3.26, end: 3.54 },
+  { word: "runs",   start: 3.58, end: 3.86 },
+  { word: "into",   start: 3.90, end: 4.16 },
+  { word: "the",    start: 4.20, end: 4.38 },
+  { word: "wild",   start: 4.42, end: 4.72 },
+  { word: "night",  start: 4.76, end: 5.10 },
+  { word: "again",  start: 5.14, end: 5.50 },
+  { word: "forever",start: 5.54, end: 6.00 },
 ];
 
 export function Studio() {
@@ -58,7 +354,7 @@ export function Studio() {
 
   // Use uploaded words/duration or fallback dummy data for live preview
   const words = storeWords && storeWords.length > 0 ? storeWords : DUMMY_WORDS;
-  const durationInSeconds = storeDuration > 0 ? storeDuration : 5;
+  const durationInSeconds = storeDuration > 0 ? storeDuration : 7;
 
   const [exporting, setExporting] = useState(false);
   const [naturalAspect, setNaturalAspect] = useState<number | null>(null);
@@ -409,13 +705,14 @@ export function Studio() {
                       </div>
 
                       <div className="flex h-16 w-full items-center justify-center rounded-xl bg-black/60 border border-white/[0.04] p-2 overflow-hidden">
-                        {t.id === "snipcap_special" && (
-                          <div className="text-center leading-none">
-                            <div className="text-[9px] text-white/40 lowercase">the quick</div>
-                            <div className="text-[15px] font-black uppercase my-0.5" style={{ color: accent, textShadow: `0 0 8px ${accent}` }}>BROWN</div>
-                            <div className="text-[9px] text-white/40 lowercase">fox jumps</div>
-                          </div>
+                        {/* Live animated previews for kinetic/dramatic themes */}
+                        {ANIMATED_THEMES.has(t.id) && (
+                          <AnimatedPreview themeId={t.id} accent={accent} />
                         )}
+                        {t.id === "kinetic_01" && (
+                          <AnimatedPreview themeId="kinetic_01" accent={accent} />
+                        )}
+                        {/* Static previews for clean themes */}
                         {t.id === "black_punch" && (
                           <div className="text-center leading-none">
                             <div className="text-[9px] text-white/30 uppercase">THE QUICK</div>
@@ -435,7 +732,7 @@ export function Studio() {
                             }}
                           >
                             <span className="text-white/40">the</span>
-                            <span className="text-white font-bold" style={{ color: accent }}>quick</span>
+                            <span className="font-bold" style={{ color: accent }}>quick</span>
                             <span className="text-white/40">fox</span>
                           </div>
                         )}
@@ -444,7 +741,8 @@ export function Studio() {
                             <span className="text-[16px] uppercase tracking-wide" style={{ color: accent }}>BROWN</span>
                           </div>
                         )}
-                        {t.id !== "snipcap_special" && t.id !== "black_punch" && t.id !== "liquid_glass" && t.id !== "one_word" && (
+                        {/* Generic text preview for remaining themes */}
+                        {!ANIMATED_THEMES.has(t.id) && t.id !== "kinetic_01" && t.id !== "black_punch" && t.id !== "liquid_glass" && t.id !== "one_word" && (
                           <p
                             className="text-[15px] font-extrabold tracking-tight"
                             style={{
@@ -556,38 +854,7 @@ export function Studio() {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                    {[
-                      { name: "SF Pro Display", value: '"SF Pro Display", sans-serif', desc: "Clean & Apple" },
-                      { name: "Gilroy ExtraBold", value: '"Gilroy", sans-serif', desc: "Modern & Punchy" },
-                      { name: "Helvetica Rounded", value: '"Helvetica Rounded", sans-serif', desc: "Soft & Comic" },
-                      { name: "Helvetica Bold", value: '"Helvetica Bold", sans-serif', desc: "Impact & Glow" },
-                      { name: "Readex Pro", value: '"Readex Pro", sans-serif', desc: "Clean & Rounded" },
-                      { name: "Celosia Nature", value: '"Celosia Nature", sans-serif', desc: "Elegant script" },
-                      { name: "Longmile", value: '"Longmile", sans-serif', desc: "Bold Display" },
-                      { name: "NCL Gasdrifo", value: '"NCL Gasdrifo", sans-serif', desc: "Distorted Creative" },
-                      { name: "Retro Floral", value: '"Retro Floral", sans-serif', desc: "Decorative Retro" },
-                      { name: "Qurova Light", value: '"Qurova Light", sans-serif', desc: "Premium Light serif" },
-                    ].map((f) => {
-                      const isActive = customFontFamily === f.value;
-                      return (
-                        <button
-                          key={f.name}
-                          type="button"
-                          onClick={() => setCustomFontFamily(f.value)}
-                          className={`rounded-xl border p-2 text-left transition-all duration-150 ${
-                            isActive
-                              ? "border-[#2997FF] bg-[#2997FF]/10 text-white"
-                              : "border-white/[0.06] bg-white/[0.02] text-white/70 hover:bg-white/[0.04] hover:text-white"
-                          }`}
-                          style={{ fontFamily: f.value }}
-                        >
-                          <div className="text-[11px] font-extrabold truncate">{f.name}</div>
-                          <div className="text-[9px] text-white/40 truncate mt-0.5">{f.desc}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <FontDropdown value={customFontFamily} onChange={setCustomFontFamily} />
                 </div>
 
                 {/* Caption Scale Slider */}
