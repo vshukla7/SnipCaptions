@@ -1,18 +1,13 @@
 "use client";
 
-import { useMemo, useState, useRef, useEffect, useCallback } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
+import { Player } from "@remotion/player";
 import { useApp } from "@/lib/store";
 import { CAPTION_THEMES } from "@/lib/types";
-import { formatTime } from "@/lib/utils";
+import { CaptionComposition } from "./CaptionComposition";
 import { CaptionTransformBox } from "./CaptionTransformBox";
 
 const FPS = 30;
-
-const ASPECTS = [
-  { id: "9:16", label: "9:16", w: 1080, h: 1920 },
-  { id: "1:1", label: "1:1", w: 1080, h: 1080 },
-  { id: "16:9", label: "16:9", w: 1920, h: 1080 },
-] as const;
 
 const PRESET_COLORS = [
   "#ffffff",
@@ -24,10 +19,23 @@ const PRESET_COLORS = [
   "#af52de",
 ];
 
+// Fallback dummy words for instant studio UI preview & coding
+const DUMMY_WORDS = [
+  { word: "the", start: 0.1, end: 0.4 },
+  { word: "quick", start: 0.45, end: 0.8 },
+  { word: "brown", start: 0.85, end: 1.2 },
+  { word: "fox", start: 1.25, end: 1.6 },
+  { word: "jumps", start: 1.65, end: 2.0 },
+  { word: "over", start: 2.05, end: 2.4 },
+  { word: "the", start: 2.45, end: 2.7 },
+  { word: "lazy", start: 2.75, end: 3.1 },
+  { word: "dog", start: 3.15, end: 3.6 },
+];
+
 export function Studio() {
   const {
     videoUrl,
-    words,
+    words: storeWords,
     captionTheme,
     captionPosition,
     setCaptionPosition,
@@ -35,7 +43,7 @@ export function Studio() {
     setCaptionScale,
     customAccentColor,
     setCustomAccentColor,
-    durationInSeconds,
+    durationInSeconds: storeDuration,
     status,
     progress,
     setStatus,
@@ -44,15 +52,15 @@ export function Studio() {
     setCaptionTheme,
   } = useApp();
 
-  const [aspect, setAspect] = useState<(typeof ASPECTS)[number]>(ASPECTS[0]);
-  const [exporting, setExporting] = useState(false);
-  const [playing, setPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [activeTab, setActiveTab] = useState<"templates" | "settings" | "transcript">("templates");
+  // Use uploaded words/duration or fallback dummy data for instant live preview
+  const words = storeWords && storeWords.length > 0 ? storeWords : DUMMY_WORDS;
+  const durationInSeconds = storeDuration > 0 ? storeDuration : 5;
 
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [naturalAspect, setNaturalAspect] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<"templates" | "settings">("templates");
+
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
-  const timelineRef = useRef<HTMLDivElement | null>(null);
 
   const [playerDims, setPlayerDims] = useState<{ width: number; height: number }>({
     width: 0,
@@ -65,7 +73,19 @@ export function Studio() {
   );
 
   const durationInFrames = Math.max(1, Math.round(durationInSeconds * FPS));
-  const ready = Boolean(videoUrl) && words.length > 0;
+  const ready = Boolean(videoUrl) || words.length > 0;
+
+  // Auto detect natural aspect ratio when video URL is present
+  useEffect(() => {
+    if (!videoUrl) return;
+    const v = document.createElement("video");
+    v.src = videoUrl;
+    v.onloadedmetadata = () => {
+      if (v.videoWidth && v.videoHeight) {
+        setNaturalAspect(v.videoWidth / v.videoHeight);
+      }
+    };
+  }, [videoUrl]);
 
   // Measure player container size for Fabric.js overlay
   useEffect(() => {
@@ -83,90 +103,10 @@ export function Studio() {
     const observer = new ResizeObserver(updateSize);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [aspect]);
-
-  // Video playback sync
-  useEffect(() => {
-    const vid = videoRef.current;
-    if (!vid) return;
-    let raf: number;
-    const tick = () => {
-      setCurrentTime(vid.currentTime);
-      raf = requestAnimationFrame(tick);
-    };
-    const onPlay = () => {
-      setPlaying(true);
-      raf = requestAnimationFrame(tick);
-    };
-    const onPause = () => {
-      setPlaying(false);
-      cancelAnimationFrame(raf);
-    };
-    vid.addEventListener("play", onPlay);
-    vid.addEventListener("pause", onPause);
-    vid.addEventListener("ended", onPause);
-    if (!vid.paused) raf = requestAnimationFrame(tick);
-    return () => {
-      vid.removeEventListener("play", onPlay);
-      vid.removeEventListener("pause", onPause);
-      vid.removeEventListener("ended", onPause);
-      cancelAnimationFrame(raf);
-    };
-  }, [videoUrl]);
-
-  const togglePlay = useCallback(() => {
-    const vid = videoRef.current;
-    if (!vid) return;
-    if (vid.paused) vid.play();
-    else vid.pause();
-  }, []);
-
-  // Keyboard shortcut listener (Spacebar for play/pause)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.code === "Space" && (e.target as HTMLElement).tagName !== "INPUT") {
-        e.preventDefault();
-        togglePlay();
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [togglePlay]);
-
-  const seek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    if (videoRef.current) {
-      videoRef.current.currentTime = pct * (videoRef.current.duration || 0);
-    }
-  }, []);
-
-  const stepTime = useCallback((delta: number) => {
-    if (videoRef.current) {
-      const dur = videoRef.current.duration || 0;
-      videoRef.current.currentTime = Math.max(0, Math.min(dur, videoRef.current.currentTime + delta));
-    }
-  }, []);
-
-  // Active word index & current line text
-  const activeWordIndex = useMemo(() => {
-    if (!words.length) return -1;
-    return words.findIndex((w) => currentTime >= w.start && currentTime <= w.end);
-  }, [words, currentTime]);
-
-  const activeLineText = useMemo(() => {
-    if (activeWordIndex < 0) {
-      // Find nearest word or first line
-      if (words.length > 0 && currentTime < words[0].start) return words.slice(0, 3).map((w) => w.word).join(" ");
-      return null;
-    }
-    const lineStart = Math.floor(activeWordIndex / 3) * 3;
-    const lineWords = words.slice(lineStart, lineStart + 3);
-    return lineWords.map((w) => w.word).join(" ");
-  }, [words, activeWordIndex, currentTime]);
+  }, [naturalAspect]);
 
   const handleExport = async () => {
-    if (!ready || !videoUrl) return;
+    if (!ready) return;
     setExporting(true);
     setStatus("exporting");
     setProgress(0);
@@ -175,17 +115,20 @@ export function Studio() {
       const { renderMediaOnWeb } = await import("@remotion/web-renderer");
       const controller = new AbortController();
 
+      const aspectW = naturalAspect ? Math.round(1080 * naturalAspect) : 1080;
+      const aspectH = 1920;
+
       const { getBlob } = await renderMediaOnWeb({
         composition: {
           id: "snipcaptions",
-          component: (await import("./CaptionComposition")).CaptionComposition as never,
+          component: CaptionComposition as never,
           durationInFrames,
           fps: FPS,
-          width: aspect.w,
-          height: aspect.h,
+          width: aspectW,
+          height: aspectH,
         } as never,
         inputProps: {
-          src: videoUrl,
+          src: videoUrl || "",
           words,
           theme: captionTheme,
           accentColor: accent,
@@ -223,44 +166,27 @@ export function Studio() {
     }
   };
 
-  const progressPct = durationInSeconds > 0 ? (currentTime / durationInSeconds) * 100 : 0;
-
   return (
     <div className="flex h-[calc(100vh-108px)] w-full flex-col overflow-hidden bg-[#0A0A0C]">
       {/* Studio Header Toolbar */}
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#121214] px-5">
-        {/* Aspect Ratio Selector */}
-        <div className="flex items-center gap-1 rounded-xl bg-white/[0.04] p-1 border border-white/[0.06]">
-          {ASPECTS.map((a) => (
-            <button
-              key={a.id}
-              onClick={() => setAspect(a)}
-              className={`rounded-lg px-3 py-1 text-[12px] font-medium transition-all ${
-                aspect.id === a.id
-                  ? "bg-[#2997FF] text-white shadow-md shadow-[#2997FF]/20"
-                  : "text-white/50 hover:text-white"
-              }`}
-            >
-              {a.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <span className="text-[13px] font-semibold text-white/90">
+            Video Studio
+          </span>
+          {naturalAspect && (
+            <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[10px] font-mono text-white/50">
+              {naturalAspect > 1 ? "16:9 Landscape" : naturalAspect < 0.9 ? "9:16 Portrait" : "1:1 Square"}
+            </span>
+          )}
         </div>
 
         {/* Action Controls */}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => {
-              setCaptionPosition({ x: 50, y: 80 });
-              setCaptionScale(1.0);
-            }}
-            className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1 text-[12px] font-medium text-white/70 hover:bg-white/[0.08] hover:text-white"
-          >
-            Reset Position
-          </button>
-          <button
             onClick={handleExport}
             disabled={exporting || !ready}
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#2997FF] to-[#0066CC] px-4 py-1.5 text-[13px] font-semibold text-white shadow-lg shadow-[#2997FF]/25 transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-40"
+            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#2997FF] to-[#0066CC] px-4 py-1.5 text-[13px] font-semibold text-white shadow-lg shadow-[#2997FF]/25 transition-all disabled:opacity-40"
           >
             {exporting ? (
               <>
@@ -284,28 +210,39 @@ export function Studio() {
         </div>
       </div>
 
-      {/* Main Studio View (Left Player + Right Sidebar) */}
+      {/* Main Studio View (Remotion Player + Right Sidebar) */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left: Player Viewport */}
+        {/* Left: Player Viewport with Remotion Built-in Player */}
         <div className="flex flex-1 flex-col overflow-hidden bg-black/60">
-          <div className="flex flex-1 items-center justify-center p-4">
-            {ready && videoUrl ? (
+          <div className="flex flex-1 items-center justify-center p-3 sm:p-5 min-h-0 min-w-0">
+            {ready ? (
               <div
                 ref={playerContainerRef}
-                className="relative flex items-center justify-center overflow-hidden rounded-2xl bg-black border border-white/[0.08] shadow-2xl"
+                className="relative flex items-center justify-center overflow-hidden rounded-2xl bg-black border border-white/[0.08] shadow-2xl h-full w-full max-h-full max-w-full"
                 style={{
-                  maxWidth: "100%",
-                  maxHeight: "100%",
-                  aspectRatio: `${aspect.w} / ${aspect.h}`,
+                  aspectRatio: naturalAspect ? `${naturalAspect}` : undefined,
                 }}
               >
-                <video
-                  ref={videoRef}
-                  src={videoUrl}
-                  className="h-full w-full object-contain"
-                  playsInline
+                <Player
+                  component={CaptionComposition}
+                  inputProps={{
+                    src: videoUrl || "",
+                    words,
+                    theme: captionTheme,
+                    accentColor: accent,
+                    position: captionPosition,
+                    scale: captionScale,
+                  }}
+                  durationInFrames={durationInFrames}
+                  fps={FPS}
+                  compositionWidth={naturalAspect && naturalAspect > 1 ? 1920 : 1080}
+                  compositionHeight={naturalAspect && naturalAspect > 1 ? Math.round(1920 / naturalAspect) : 1920}
+                  controls
                   loop
-                  onClick={togglePlay}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                  }}
                 />
 
                 {/* Fabric.js TransformBox Overlay */}
@@ -313,60 +250,7 @@ export function Studio() {
                   <CaptionTransformBox
                     containerWidth={playerDims.width}
                     containerHeight={playerDims.height}
-                    activeText={activeLineText ?? "Sample Caption"}
                   />
-                )}
-
-                {/* Dynamic Live Caption Display */}
-                {activeLineText && (
-                  <div
-                    className="absolute pointer-events-none z-10 text-center px-4"
-                    style={{
-                      left: `${captionPosition.x}%`,
-                      top: `${captionPosition.y}%`,
-                      transform: `translate(-50%, -50%) scale(${captionScale})`,
-                      maxWidth: "90%",
-                    }}
-                  >
-                    <div
-                      className="rounded-xl px-4 py-2 text-center"
-                      style={{
-                        background: captionTheme === "clean" ? "rgba(0,0,0,0.65)" : "transparent",
-                        backdropFilter: captionTheme === "clean" ? "blur(8px)" : undefined,
-                      }}
-                    >
-                      <p
-                        className="text-[22px] font-extrabold leading-tight tracking-tight"
-                        style={{
-                          color: captionTheme === "neon" ? accent : "#fff",
-                          textShadow:
-                            captionTheme === "neon"
-                              ? `0 0 12px ${accent}, 0 0 28px ${accent}`
-                              : "0 2px 10px rgba(0,0,0,0.6)",
-                          fontFamily:
-                            captionTheme === "clean" || captionTheme === "highlight"
-                              ? "var(--font-display)"
-                              : "var(--font-creative)",
-                        }}
-                      >
-                        {activeLineText}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Play Overlay Button when paused */}
-                {!playing && (
-                  <button
-                    onClick={togglePlay}
-                    className="absolute inset-0 z-30 flex items-center justify-center bg-black/20 backdrop-blur-[2px] transition-all hover:bg-black/30"
-                  >
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white/90 shadow-xl transition-transform hover:scale-110">
-                      <svg width="24" height="24" viewBox="0 0 24 24" fill="#000">
-                        <polygon points="6,3 20,12 6,21" />
-                      </svg>
-                    </div>
-                  </button>
                 )}
               </div>
             ) : (
@@ -378,107 +262,6 @@ export function Studio() {
                 <p className="mt-2 text-[14px]">No video loaded</p>
               </div>
             )}
-          </div>
-
-          {/* Bottom Timeline Bar */}
-          <div className="shrink-0 border-t border-white/[0.06] bg-[#121214] px-5 py-2.5">
-            <div className="flex items-center gap-4">
-              {/* Playback Buttons */}
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => {
-                    if (videoRef.current) videoRef.current.currentTime = 0;
-                  }}
-                  title="Jump to Start"
-                  className="rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polygon points="19 20 9 12 19 4 19 20" />
-                    <line x1="5" y1="19" x2="5" y2="5" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => stepTime(-1)}
-                  title="Rewind 1s"
-                  className="rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="11 17 6 12 11 7" />
-                    <polyline points="18 17 13 12 18 7" />
-                  </svg>
-                </button>
-                <button
-                  onClick={togglePlay}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2997FF] text-white shadow-md shadow-[#2997FF]/30 transition-transform hover:scale-105"
-                >
-                  {playing ? (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                      <rect x="6" y="4" width="4" height="16" rx="1" />
-                      <rect x="14" y="4" width="4" height="16" rx="1" />
-                    </svg>
-                  ) : (
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                      <polygon points="6,3 20,12 6,21" />
-                    </svg>
-                  )}
-                </button>
-                <button
-                  onClick={() => stepTime(1)}
-                  title="Forward 1s"
-                  className="rounded-lg p-1.5 text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="13 17 18 12 13 7" />
-                    <polyline points="6 17 11 12 6 7" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Time Display */}
-              <span className="min-w-[95px] text-[12px] font-mono text-white/50">
-                {formatTime(currentTime)} / {formatTime(durationInSeconds)}
-              </span>
-
-              {/* Timeline Track & Playhead */}
-              <div ref={timelineRef} onClick={seek} className="group relative flex-1 cursor-pointer py-2">
-                {/* Word Blocks Track */}
-                <div className="relative h-6 w-full overflow-hidden rounded-md bg-white/[0.04] border border-white/[0.06]">
-                  {words.map((w, i) => {
-                    const left = durationInSeconds > 0 ? (w.start / durationInSeconds) * 100 : 0;
-                    const width = durationInSeconds > 0 ? ((w.end - w.start) / durationInSeconds) * 100 : 0;
-                    const isActive = i === activeWordIndex;
-                    return (
-                      <div
-                        key={i}
-                        className="absolute top-1 h-4 rounded-sm transition-all duration-75"
-                        style={{
-                          left: `${left}%`,
-                          width: `${Math.max(width, 0.4)}%`,
-                          background: isActive ? accent : "rgba(255,255,255,0.18)",
-                          boxShadow: isActive ? `0 0 8px ${accent}60` : undefined,
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-
-                {/* Progress Scrubber Fill */}
-                <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-white/[0.06]">
-                  <div
-                    className="h-full rounded-full bg-[#2997FF] transition-all duration-75"
-                    style={{ width: `${progressPct}%` }}
-                  />
-                </div>
-
-                {/* Playhead Marker */}
-                <div
-                  className="absolute top-0 h-9 w-3 -translate-x-1/2 rounded-md bg-white shadow-xl transition-[left] duration-75 border border-black/20"
-                  style={{ left: `${progressPct}%` }}
-                >
-                  <div className="mx-auto mt-2 h-4 w-0.5 rounded-full bg-[#2997FF]" />
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -512,22 +295,13 @@ export function Studio() {
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {activeTab === "templates" && (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-white/40">
-                    Built-in Templates
-                  </span>
-                  <span className="rounded-full bg-[#2997FF]/10 px-2.5 py-0.5 text-[10px] font-medium text-[#2997FF]">
-                    {CAPTION_THEMES.length} Available
-                  </span>
-                </div>
-
                 {CAPTION_THEMES.map((t) => {
                   const isSelected = t.id === captionTheme;
                   return (
                     <button
                       key={t.id}
                       onClick={() => setCaptionTheme(t.id)}
-                      className={`group w-full rounded-2xl p-3.5 text-left transition-all duration-200 ${
+                      className={`group w-full rounded-2xl p-3 text-left transition-all duration-200 ${
                         isSelected
                           ? "border-2 border-[#2997FF] bg-[#2997FF]/[0.08] shadow-[0_0_20px_rgba(41,151,255,0.15)]"
                           : "border border-white/[0.06] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
@@ -558,8 +332,6 @@ export function Studio() {
                           the quick <span style={{ color: t.accent }}>BROWN</span>
                         </p>
                       </div>
-
-                      <p className="mt-2 text-[11px] text-white/40 leading-snug">{t.description}</p>
                     </button>
                   );
                 })}

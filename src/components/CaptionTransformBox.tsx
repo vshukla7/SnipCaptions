@@ -13,7 +13,6 @@ interface CaptionTransformBoxProps {
 export function CaptionTransformBox({
   containerWidth,
   containerHeight,
-  activeText,
 }: CaptionTransformBoxProps) {
   const { captionPosition, setCaptionPosition, captionScale, setCaptionScale } =
     useApp();
@@ -154,12 +153,6 @@ export function CaptionTransformBox({
       style={{ width: containerWidth, height: containerHeight }}
     >
       <canvas ref={canvasElRef} className="absolute inset-0" />
-      <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-black/70 px-2.5 py-1 backdrop-blur-md border border-white/10 shadow-lg">
-        <span className="h-2 w-2 rounded-full bg-[#2997FF] animate-pulse" />
-        <span className="text-[11px] font-medium text-white/90">
-          Fabric.js TransformBox · Drag & scale caption box
-        </span>
-      </div>
     </div>
   );
 }
