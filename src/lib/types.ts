@@ -1,4 +1,12 @@
-export type CaptionThemeId = "neon" | "kinetic" | "clean" | "highlight";
+export type CaptionThemeId =
+  | "neon"
+  | "kinetic"
+  | "clean"
+  | "highlight"
+  | "snipcap_special"
+  | "black_punch"
+  | "liquid_glass"
+  | "one_word";
 
 export interface CaptionPosition {
   x: number; // percentage 0 - 100
@@ -66,6 +74,38 @@ export const CAPTION_THEMES: CaptionThemeMeta[] = [
     id: "highlight",
     name: "Word-by-Word Highlight",
     description: "Each spoken word lights up as you talk.",
+    fontClass: "font-display",
+    accent: "#ffd60a",
+    wordByWord: true,
+  },
+  {
+    id: "snipcap_special",
+    name: "Snipcap Special",
+    description: "Premium Apple-style hybrid slide-up/left layout with dramatic timing.",
+    fontClass: "font-display",
+    accent: "#30d158",
+    wordByWord: true,
+  },
+  {
+    id: "black_punch",
+    name: "Black Punch",
+    description: "Crisp black lettering with stark high-contrast typography.",
+    fontClass: "font-creative",
+    accent: "#000000",
+    wordByWord: true,
+  },
+  {
+    id: "liquid_glass",
+    name: "Liquid Glass",
+    description: "Elegant glassmorphism pill badge layout.",
+    fontClass: "font-display",
+    accent: "#ffffff",
+    wordByWord: true,
+  },
+  {
+    id: "one_word",
+    name: "One Word Solo",
+    description: "Display only the currently spoken word, with zero animations.",
     fontClass: "font-display",
     accent: "#ffd60a",
     wordByWord: true,

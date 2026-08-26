@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
-import { Player } from "@remotion/player";
+import { Player, PlayerRef } from "@remotion/player";
 import { useApp } from "@/lib/store";
 import { CAPTION_THEMES } from "@/lib/types";
 import { CaptionComposition } from "./CaptionComposition";
@@ -43,6 +43,8 @@ export function Studio() {
     setCaptionScale,
     customAccentColor,
     setCustomAccentColor,
+    customFontFamily,
+    setCustomFontFamily,
     durationInSeconds: storeDuration,
     status,
     progress,
@@ -62,6 +64,28 @@ export function Studio() {
   const [naturalAspect, setNaturalAspect] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"templates" | "settings" | "transcript">("templates");
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<PlayerRef>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  // Monitor play/pause status of the Remotion Player
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!player) return;
+
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+
+    player.addEventListener("play", onPlay);
+    player.addEventListener("pause", onPause);
+
+    // Sync initial state
+    setIsPlaying(player.isPlaying());
+
+    return () => {
+      player.removeEventListener("play", onPlay);
+      player.removeEventListener("pause", onPause);
+    };
+  }, [videoUrl]);
 
   const [playerDims, setPlayerDims] = useState<{ width: number; height: number }>({
     width: 0,
@@ -135,6 +159,7 @@ export function Studio() {
           accentColor: accent,
           position: captionPosition,
           scale: captionScale,
+          customFontFamily,
         },
         container: "mp4",
         videoBitrate: "medium",
@@ -167,6 +192,46 @@ export function Studio() {
     }
   };
 
+  const downloadSRT = () => {
+    if (!words || words.length === 0) return;
+    
+    const srtLines: string[] = [];
+    const maxWordsPerSrtLine = 4;
+    let sequence = 1;
+    
+    for (let i = 0; i < words.length; i += maxWordsPerSrtLine) {
+      const chunk = words.slice(i, i + maxWordsPerSrtLine);
+      const start = chunk[0].start;
+      const end = chunk[chunk.length - 1].end;
+      const text = chunk.map(w => w.word).join(" ");
+      
+      const formatTime = (seconds: number) => {
+        const hrs = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        const secs = Math.floor(seconds % 60);
+        const ms = Math.floor((seconds % 1) * 1000);
+        return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
+      };
+      
+      srtLines.push(`${sequence}`);
+      srtLines.push(`${formatTime(start)} --> ${formatTime(end)}`);
+      srtLines.push(text);
+      srtLines.push("");
+      sequence++;
+    }
+    
+    const content = srtLines.join("\n");
+    const blob = new Blob([content], { type: "text/srt;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "subtitles.srt";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="flex h-[calc(100vh-108px)] w-full flex-col overflow-hidden bg-[#0A0A0C]">
       {/* Studio Header Toolbar */}
@@ -184,6 +249,19 @@ export function Studio() {
 
         {/* Action Controls */}
         <div className="flex items-center gap-3">
+          <button
+            onClick={downloadSRT}
+            disabled={!ready || words.length === 0}
+            className="flex items-center gap-2 rounded-xl bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.12] px-3.5 py-1.5 text-[13px] font-semibold text-white/90 transition-all disabled:opacity-40"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span>Download SRT</span>
+          </button>
+
           <button
             onClick={handleExport}
             disabled={exporting || !ready}
@@ -225,6 +303,7 @@ export function Studio() {
                 }}
               >
                 <Player
+                  ref={playerRef}
                   component={CaptionComposition}
                   inputProps={{
                     src: videoUrl || "",
@@ -233,6 +312,7 @@ export function Studio() {
                     accentColor: accent,
                     position: captionPosition,
                     scale: captionScale,
+                    customFontFamily,
                   }}
                   durationInFrames={durationInFrames}
                   fps={FPS}
@@ -246,8 +326,8 @@ export function Studio() {
                   }}
                 />
 
-                {/* Fabric.js TransformBox Overlay */}
-                {playerDims.width > 0 && playerDims.height > 0 && (
+                {/* Fabric.js TransformBox Overlay (Only active when paused) */}
+                {playerDims.width > 0 && playerDims.height > 0 && !isPlaying && (
                   <CaptionTransformBox
                     containerWidth={playerDims.width}
                     containerHeight={playerDims.height}
@@ -328,21 +408,58 @@ export function Studio() {
                         )}
                       </div>
 
-                      <div className="flex h-14 items-center justify-center rounded-xl bg-black/60 border border-white/[0.04] p-2">
-                        <p
-                          className="text-[17px] font-extrabold tracking-tight"
-                          style={{
-                            color: accent,
-                            fontFamily:
-                              t.id === "clean" || t.id === "highlight"
-                                ? "var(--font-display)"
-                                : "var(--font-creative)",
-                            textShadow:
-                              t.id === "neon" ? `0 0 10px ${accent}, 0 0 22px ${accent}` : undefined,
-                          }}
-                        >
-                          the quick <span style={{ color: accent }}>BROWN</span>
-                        </p>
+                      <div className="flex h-16 w-full items-center justify-center rounded-xl bg-black/60 border border-white/[0.04] p-2 overflow-hidden">
+                        {t.id === "snipcap_special" && (
+                          <div className="text-center leading-none">
+                            <div className="text-[9px] text-white/40 lowercase">the quick</div>
+                            <div className="text-[15px] font-black uppercase my-0.5" style={{ color: accent, textShadow: `0 0 8px ${accent}` }}>BROWN</div>
+                            <div className="text-[9px] text-white/40 lowercase">fox jumps</div>
+                          </div>
+                        )}
+                        {t.id === "black_punch" && (
+                          <div className="text-center leading-none">
+                            <div className="text-[9px] text-white/30 uppercase">THE QUICK</div>
+                            <div className="text-[15px] font-black uppercase mt-1" style={{ color: "#000000", WebkitTextStroke: "0.5px rgba(255,255,255,0.8)" }}>BROWN</div>
+                          </div>
+                        )}
+                        {t.id === "liquid_glass" && (
+                          <div
+                            className="text-[11px] font-medium"
+                            style={{
+                              background: "rgba(255,255,255,0.1)",
+                              border: "1px solid rgba(255,255,255,0.2)",
+                              borderRadius: "20px",
+                              padding: "4px 12px",
+                              display: "inline-flex",
+                              gap: "4px",
+                            }}
+                          >
+                            <span className="text-white/40">the</span>
+                            <span className="text-white font-bold" style={{ color: accent }}>quick</span>
+                            <span className="text-white/40">fox</span>
+                          </div>
+                        )}
+                        {t.id === "one_word" && (
+                          <div className="text-center leading-none font-bold">
+                            <span className="text-[16px] uppercase tracking-wide" style={{ color: accent }}>BROWN</span>
+                          </div>
+                        )}
+                        {t.id !== "snipcap_special" && t.id !== "black_punch" && t.id !== "liquid_glass" && t.id !== "one_word" && (
+                          <p
+                            className="text-[15px] font-extrabold tracking-tight"
+                            style={{
+                              color: t.id === "clean" ? "#ffffff" : accent,
+                              fontFamily:
+                                t.id === "clean" || t.id === "highlight"
+                                  ? "var(--font-display)"
+                                  : "var(--font-creative)",
+                              textShadow:
+                                t.id === "neon" ? `0 0 10px ${accent}, 0 0 22px ${accent}` : undefined,
+                            }}
+                          >
+                            the quick <span style={{ color: accent }}>BROWN</span>
+                          </p>
+                        )}
                       </div>
                     </button>
                   );
@@ -423,6 +540,55 @@ export function Studio() {
                     </div>
                   </div>
                 )}
+
+                {/* Font Selector / Font Pair Feature */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold uppercase tracking-wider text-white/40">
+                      Typography / Emotions
+                    </label>
+                    {customFontFamily && (
+                      <button
+                        onClick={() => setCustomFontFamily(null)}
+                        className="text-[10px] font-medium text-[#2997FF] hover:underline"
+                      >
+                        Reset Font
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                    {[
+                      { name: "SF Pro Display", value: '"SF Pro Display", sans-serif', desc: "Clean & Apple" },
+                      { name: "Gilroy ExtraBold", value: '"Gilroy", sans-serif', desc: "Modern & Punchy" },
+                      { name: "Helvetica Rounded", value: '"Helvetica Rounded", sans-serif', desc: "Soft & Comic" },
+                      { name: "Helvetica Bold", value: '"Helvetica Bold", sans-serif', desc: "Impact & Glow" },
+                      { name: "Readex Pro", value: '"Readex Pro", sans-serif', desc: "Clean & Rounded" },
+                      { name: "Celosia Nature", value: '"Celosia Nature", sans-serif', desc: "Elegant script" },
+                      { name: "Longmile", value: '"Longmile", sans-serif', desc: "Bold Display" },
+                      { name: "NCL Gasdrifo", value: '"NCL Gasdrifo", sans-serif', desc: "Distorted Creative" },
+                      { name: "Retro Floral", value: '"Retro Floral", sans-serif', desc: "Decorative Retro" },
+                      { name: "Qurova Light", value: '"Qurova Light", sans-serif', desc: "Premium Light serif" },
+                    ].map((f) => {
+                      const isActive = customFontFamily === f.value;
+                      return (
+                        <button
+                          key={f.name}
+                          type="button"
+                          onClick={() => setCustomFontFamily(f.value)}
+                          className={`rounded-xl border p-2 text-left transition-all duration-150 ${
+                            isActive
+                              ? "border-[#2997FF] bg-[#2997FF]/10 text-white"
+                              : "border-white/[0.06] bg-white/[0.02] text-white/70 hover:bg-white/[0.04] hover:text-white"
+                          }`}
+                          style={{ fontFamily: f.value }}
+                        >
+                          <div className="text-[11px] font-extrabold truncate">{f.name}</div>
+                          <div className="text-[9px] text-white/40 truncate mt-0.5">{f.desc}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
                 {/* Caption Scale Slider */}
                 <div>

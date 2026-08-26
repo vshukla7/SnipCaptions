@@ -43,6 +43,9 @@ interface AppContextValue {
   customAccentColor: string | null;
   setCustomAccentColor: (c: string | null) => void;
 
+  customFontFamily: string | null;
+  setCustomFontFamily: (f: string | null) => void;
+
   recentColors: string[];
 
   words: Word[];
@@ -71,6 +74,7 @@ const LANG_STORAGE = "sc_language";
 const THEME_STORAGE = "sc_caption_theme";
 
 const RECENT_COLORS_STORAGE = "sc_recent_colors";
+const FONT_STORAGE = "sc_custom_font";
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [apiKey, setApiKeyState] = useState("");
@@ -81,6 +85,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [captionPosition, setCaptionPosition] = useState<CaptionPosition>({ x: 50, y: 80 });
   const [captionScale, setCaptionScale] = useState<number>(1.0);
   const [customAccentColor, setCustomAccentColorState] = useState<string | null>(null);
+  const [customFontFamily, setCustomFontFamilyState] = useState<string | null>(null);
   const [recentColors, setRecentColors] = useState<string[]>([]);
   const [transcription, setTranscription] =
     useState<TranscriptionResult | null>(null);
@@ -99,6 +104,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCaptionThemeState(
       (localStorage.getItem(THEME_STORAGE) as CaptionThemeId) ?? "clean",
     );
+    setCustomFontFamilyState(localStorage.getItem(FONT_STORAGE));
     try {
       const raw = localStorage.getItem(RECENT_COLORS_STORAGE);
       if (raw) setRecentColors(JSON.parse(raw));
@@ -129,6 +135,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         localStorage.setItem(RECENT_COLORS_STORAGE, JSON.stringify(updated));
         return updated;
       });
+    }
+  }, []);
+
+  const setCustomFontFamily = useCallback((f: string | null) => {
+    setCustomFontFamilyState(f);
+    if (f) {
+      localStorage.setItem(FONT_STORAGE, f);
+    } else {
+      localStorage.removeItem(FONT_STORAGE);
     }
   }, []);
 
@@ -201,22 +216,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const openDemoStudio = useCallback(() => {
     const dummyWords: Word[] = [
-      { word: "Welcome", start: 0.1, end: 0.5 },
-      { word: "to", start: 0.55, end: 0.8 },
-      { word: "SnipCaptions", start: 0.85, end: 1.4 },
-      { word: "Studio", start: 1.45, end: 1.9 },
-      { word: "Mode", start: 1.95, end: 2.3 },
-      { word: "customize", start: 2.35, end: 2.8 },
-      { word: "your", start: 2.85, end: 3.1 },
-      { word: "captions", start: 3.15, end: 3.6 },
-      { word: "instantly!", start: 3.65, end: 4.2 },
+      { word: "A", start: 0.2, end: 0.6 },
+      { word: "quick", start: 0.65, end: 1.1 },
+      { word: "brown", start: 1.15, end: 1.7 },
+      { word: "fox", start: 1.75, end: 2.2 },
+      { word: "jumps", start: 2.25, end: 2.8 },
+      { word: "over", start: 2.85, end: 3.3 },
+      { word: "the", start: 3.35, end: 3.7 },
+      { word: "lazy", start: 3.75, end: 4.3 },
+      { word: "dog", start: 4.35, end: 4.9 },
+      { word: "always", start: 4.95, end: 5.5 },
+      { word: "on", start: 5.55, end: 5.9 },
+      { word: "the", start: 5.95, end: 6.3 },
+      { word: "video", start: 6.35, end: 7.0 },
     ];
     setTranscription({
       language: "en",
-      text: "Welcome to SnipCaptions Studio Mode customize your captions instantly!",
+      text: "A quick brown fox jumps over the lazy dog always on the video",
       words: dummyWords,
     });
-    setDurationInSeconds(4.5);
+    setVideoUrl("https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4");
+    setDurationInSeconds(15);
     setStatus("ready");
     setError(null);
   }, []);
@@ -262,6 +282,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCaptionScale,
     customAccentColor,
     setCustomAccentColor,
+    customFontFamily,
+    setCustomFontFamily,
     recentColors,
     words,
     transcription,

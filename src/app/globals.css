@@ -1,6 +1,49 @@
 @import "tailwindcss";
 @import "@fontsource-variable/geist";
 
+@font-face {
+  font-family: "Celosia Nature";
+  src: url("/fonts/Celosia-Nature.otf") format("opentype");
+}
+@font-face {
+  font-family: "Gilroy";
+  src: url("/fonts/Gilroy-ExtraBold.otf") format("opentype");
+  font-weight: 800;
+}
+@font-face {
+  font-family: "Helvetica Bold";
+  src: url("/fonts/Helvetica-Bold.ttf") format("truetype");
+  font-weight: bold;
+}
+@font-face {
+  font-family: "Longmile";
+  src: url("/fonts/Longmile.otf") format("opentype");
+}
+@font-face {
+  font-family: "NCL Gasdrifo";
+  src: url("/fonts/NCLGasdrifo-Demo.otf") format("opentype");
+}
+@font-face {
+  font-family: "Qurova Light";
+  src: url("/fonts/QurovaDEMO-Light.otf") format("opentype");
+}
+@font-face {
+  font-family: "Readex Pro";
+  src: url("/fonts/ReadexPro-Medium.ttf") format("truetype");
+}
+@font-face {
+  font-family: "Retro Floral";
+  src: url("/fonts/Retro Floral.ttf") format("truetype");
+}
+@font-face {
+  font-family: "SF Pro Display";
+  src: url("/fonts/SF-Pro-Display.otf") format("opentype");
+}
+@font-face {
+  font-family: "Helvetica Rounded";
+  src: url("/fonts/helvetica-rounded.otf") format("opentype");
+}
+
 :root {
   --brand-blue: #2997FF;
   --brand-orange: #FF9F0A;

@@ -4,10 +4,18 @@ import {
   Video,
   useCurrentFrame,
   useVideoConfig,
-  interpolate,
-  spring,
 } from "remotion";
 import type { CaptionPosition, CaptionThemeId, Word } from "@/lib/types";
+
+// Import separate template components
+import { CleanTemplate } from "./templates/CleanTemplate";
+import { NeonTemplate } from "./templates/NeonTemplate";
+import { KineticTemplate } from "./templates/KineticTemplate";
+import { HighlightTemplate } from "./templates/HighlightTemplate";
+import { SnipcapSpecialTemplate } from "./templates/SnipcapSpecialTemplate";
+import { BlackPunchTemplate } from "./templates/BlackPunchTemplate";
+import { LiquidGlassTemplate } from "./templates/LiquidGlassTemplate";
+import { OneWordTemplate } from "./templates/OneWordTemplate";
 
 export interface CaptionCompositionProps {
   src: string;
@@ -17,6 +25,7 @@ export interface CaptionCompositionProps {
   maxWordsPerLine?: number;
   position?: CaptionPosition;
   scale?: number;
+  customFontFamily?: string | null;
 }
 
 interface Line {
@@ -47,12 +56,15 @@ function buildLines(words: Word[], maxWordsPerLine: number): Line[] {
   flush();
   return lines;
 }
-
 const FONT_FOR_THEME: Record<CaptionThemeId, string> = {
-  clean: '"Inter", sans-serif',
-  neon: '"Outfit", "Poppins", sans-serif',
-  kinetic: '"Outfit", "Poppins", sans-serif',
-  highlight: '"Inter", sans-serif',
+  clean: '"SF Pro Display", "Inter", sans-serif',
+  neon: '"Gilroy", "Outfit", sans-serif',
+  kinetic: '"Gilroy", "Outfit", sans-serif',
+  highlight: '"SF Pro Display", "Inter", sans-serif',
+  snipcap_special: '"Gilroy", "SF Pro Display", sans-serif',
+  black_punch: '"Helvetica Bold", "Impact", sans-serif',
+  liquid_glass: '"Readex Pro", "Montserrat", sans-serif',
+  one_word: '"SF Pro Display", "Inter", sans-serif',
 };
 
 export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
@@ -63,6 +75,7 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
   maxWordsPerLine = 3,
   position = { x: 50, y: 80 },
   scale = 1.0,
+  customFontFamily,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width } = useVideoConfig();
@@ -78,6 +91,35 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
   );
   const activeLine = activeIndex >= 0 ? lines[activeIndex] : lines[lines.length - 1];
 
+  // Calculate active word index and neighboring words for dynamic context stack
+  const activeWordIdx = useMemo(() => {
+    const idx = words.findIndex((w) => time >= w.start && time < w.end);
+    if (idx !== -1) return idx;
+    const pastWords = words.filter((w) => time >= w.end);
+    if (pastWords.length > 0) {
+      return words.indexOf(pastWords[pastWords.length - 1]);
+    }
+    return 0;
+  }, [words, time]);
+
+  const activeWord = words[activeWordIdx];
+
+  const prevWordsStr = useMemo(() => {
+    if (activeWordIdx <= 0) return "";
+    const items = [];
+    if (activeWordIdx > 1) items.push(words[activeWordIdx - 2].word);
+    items.push(words[activeWordIdx - 1].word);
+    return items.join(" ");
+  }, [words, activeWordIdx]);
+
+  const nextWordsStr = useMemo(() => {
+    if (activeWordIdx >= words.length - 1) return "";
+    const items = [];
+    items.push(words[activeWordIdx + 1].word);
+    if (activeWordIdx < words.length - 2) items.push(words[activeWordIdx + 2].word);
+    return items.join(" ");
+  }, [words, activeWordIdx]);
+
   // Debug: log mount + sparse active-line changes (avoids per-frame spam).
   const mounted = React.useRef(false);
   const lastLine = React.useRef(-1);
@@ -90,156 +132,44 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
     console.log("[SnipCaptions:caption] frame=", frame, "time=", time.toFixed(2) + "s", "activeLine=", activeIndex, activeLine ? `→ "${activeLine.text}"` : "");
   }
 
-  const baseFont = FONT_FOR_THEME[theme];
+  const baseFont = customFontFamily || FONT_FOR_THEME[theme];
   const fontSize = Math.round(width * 0.062);
 
-  const renderWords = (
-    lineWords: Word[],
-    opts: { highlightSpoken: boolean; bounce: boolean },
-  ) =>
-    lineWords.map((w, i) => {
-      const spoken = time >= w.start;
-      const justStarted = time >= w.start && time < w.end;
-
-      let transform = "translateY(0px) scale(1)";
-      let color = "#ffffff";
-      let textShadow = "0 2px 12px rgba(0,0,0,0.55)";
-
-      if (theme === "neon") {
-        color = "#ffffff";
-        textShadow = `0 0 8px ${accentColor}, 0 0 22px ${accentColor}, 0 2px 10px rgba(0,0,0,0.6)`;
-      }
-
-      if (opts.bounce) {
-        const appearFrame = w.start * fps;
-        const s = spring({
-          frame: frame - appearFrame,
-          fps,
-          config: { damping: 11, stiffness: 140, mass: 0.6 },
-          durationInFrames: 18,
-        });
-        const scale = interpolate(s, [0, 1], [0.55, 1], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-        });
-        const y = interpolate(s, [0, 1], [34, 0], {
-          extrapolateLeft: "clamp",
-          extrapolateRight: "clamp",
-        });
-        transform = `translateY(${y}px) scale(${scale})`;
-        color = justStarted ? accentColor : "#ffffff";
-      }
-
-      if (opts.highlightSpoken) {
-        color = spoken ? accentColor : "rgba(255,255,255,0.55)";
-        if (justStarted) {
-          const pulse = spring({
-            frame: frame - w.start * fps,
-            fps,
-            config: { damping: 14, stiffness: 120 },
-            durationInFrames: 14,
-          });
-          const glow = interpolate(pulse, [0, 1], [0, 10], {
-            extrapolateRight: "clamp",
-          });
-          textShadow = `0 0 ${glow}px ${accentColor}, 0 2px 10px rgba(0,0,0,0.6)`;
-        }
-      }
-
-      return (
-        <span
-          key={`${w.word}-${i}`}
-          style={{
-            display: "inline-block",
-            color,
-            transform,
-            textShadow,
-            margin: "0 0.18em",
-            fontWeight: 800,
-            willChange: "transform",
-          }}
-        >
-          {w.word}
-        </span>
-      );
-    });
+  const templateProps = {
+    words,
+    activeLine,
+    activeWord,
+    activeWordIdx,
+    time,
+    frame,
+    fps,
+    width,
+    fontSize,
+    accentColor,
+    baseFont,
+    prevWordsStr,
+    nextWordsStr,
+    customFontFamily,
+  };
 
   let captionContent: React.ReactNode = null;
 
-  if (theme === "clean" && activeLine) {
-    captionContent = (
-      <div
-        style={{
-          fontFamily: baseFont,
-          fontSize,
-          fontWeight: 800,
-          color: accentColor || "#ffffff",
-          textAlign: "center",
-          lineHeight: 1.15,
-          textShadow: "0 2px 14px rgba(0,0,0,0.6)",
-          maxWidth: width * 0.9,
-        }}
-      >
-        {activeLine.words.map((w, i) => (
-          <span key={`${w.word}-${i}`} style={{ margin: "0 0.16em" }}>
-            {w.word}
-          </span>
-        ))}
-      </div>
-    );
-  } else if (theme === "neon" && activeLine) {
-    captionContent = (
-      <div
-        style={{
-          fontFamily: baseFont,
-          fontSize,
-          fontWeight: 800,
-          textTransform: "uppercase",
-          letterSpacing: "0.02em",
-          textAlign: "center",
-          lineHeight: 1.1,
-          textShadow: `0 0 8px ${accentColor}, 0 0 22px ${accentColor}, 0 2px 10px rgba(0,0,0,0.6)`,
-          color: "#ffffff",
-          maxWidth: width * 0.9,
-        }}
-      >
-        {activeLine.words.map((w, i) => (
-          <span key={`${w.word}-${i}`} style={{ margin: "0 0.16em" }}>
-            {w.word}
-          </span>
-        ))}
-      </div>
-    );
-  } else if (theme === "kinetic" && activeLine) {
-    captionContent = (
-      <div
-        style={{
-          fontFamily: baseFont,
-          fontSize,
-          fontWeight: 800,
-          textAlign: "center",
-          lineHeight: 1.2,
-          maxWidth: width * 0.92,
-        }}
-      >
-        {renderWords(activeLine.words, { highlightSpoken: false, bounce: true })}
-      </div>
-    );
-  } else if (theme === "highlight" && activeLine) {
-    captionContent = (
-      <div
-        style={{
-          fontFamily: baseFont,
-          fontSize,
-          fontWeight: 800,
-          textAlign: "center",
-          lineHeight: 1.2,
-          maxWidth: width * 0.92,
-        }}
-      >
-        {renderWords(activeLine.words, { highlightSpoken: true, bounce: false })}
-      </div>
-    );
+  if (theme === "clean") {
+    captionContent = <CleanTemplate {...templateProps} />;
+  } else if (theme === "neon") {
+    captionContent = <NeonTemplate {...templateProps} />;
+  } else if (theme === "kinetic") {
+    captionContent = <KineticTemplate {...templateProps} />;
+  } else if (theme === "highlight") {
+    captionContent = <HighlightTemplate {...templateProps} />;
+  } else if (theme === "snipcap_special") {
+    captionContent = <SnipcapSpecialTemplate {...templateProps} />;
+  } else if (theme === "black_punch") {
+    captionContent = <BlackPunchTemplate {...templateProps} />;
+  } else if (theme === "liquid_glass") {
+    captionContent = <LiquidGlassTemplate {...templateProps} />;
+  } else if (theme === "one_word") {
+    captionContent = <OneWordTemplate {...templateProps} />;
   }
 
   return (
