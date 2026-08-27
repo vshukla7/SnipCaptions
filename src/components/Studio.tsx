@@ -436,6 +436,16 @@ export function Studio() {
     [captionTheme, customAccentColor],
   );
 
+  const playerInputProps = useMemo(() => ({
+    src: videoUrl || "",
+    words,
+    theme: captionTheme,
+    accentColor: accent,
+    position: captionPosition,
+    scale: captionScale,
+    customFontFamily,
+  }), [videoUrl, words, captionTheme, accent, captionPosition, captionScale, customFontFamily]);
+
   const durationInFrames = Math.max(1, Math.round(durationInSeconds * FPS));
   const ready = Boolean(videoUrl) || words.length > 0;
 
@@ -475,6 +485,12 @@ export function Studio() {
 
   const handleExport = async () => {
     if (!ready) return;
+
+    // Pause the player when video exports to prevent duplicate resource usage
+    if (playerRef.current) {
+      playerRef.current.pause();
+    }
+
     setExporting(true);
     setStatus("exporting");
     setProgress(0);
@@ -507,6 +523,7 @@ export function Studio() {
         container: "mp4",
         videoBitrate: "medium",
         audioBitrate: "medium",
+        hardwareAcceleration: "prefer-hardware",
         signal: controller.signal,
         onProgress: (p: unknown) => {
           const value = typeof p === "number" ? p : (p as { progress?: number })?.progress ?? 0;
@@ -652,15 +669,7 @@ export function Studio() {
                 <Player
                   ref={playerRef}
                   component={CaptionComposition}
-                  inputProps={{
-                    src: videoUrl || "",
-                    words,
-                    theme: captionTheme,
-                    accentColor: accent,
-                    position: captionPosition,
-                    scale: captionScale,
-                    customFontFamily,
-                  }}
+                  inputProps={playerInputProps}
                   durationInFrames={durationInFrames}
                   fps={FPS}
                   compositionWidth={compWidth}

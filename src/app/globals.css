@@ -169,3 +169,11 @@ body {
 .anim-pulse-soft {
   animation: pulse-soft 2s ease-in-out infinite;
 }
+
+/* Force hardware GPU acceleration on video elements for smooth mobile playback */
+video {
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+  will-change: transform;
+}

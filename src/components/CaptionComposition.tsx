@@ -99,13 +99,21 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
 
   // Calculate active word index and neighboring words for dynamic context stack
   const activeWordIdx = useMemo(() => {
-    const idx = words.findIndex((w) => time >= w.start && time < w.end);
-    if (idx !== -1) return idx;
-    const pastWords = words.filter((w) => time >= w.end);
-    if (pastWords.length > 0) {
-      return words.indexOf(pastWords[pastWords.length - 1]);
+    // 1. Check if there's an exact match
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      if (time >= w.start && time < w.end) {
+        return i;
+      }
     }
-    return 0;
+    // 2. If not, find the last word that has ended before the current time
+    let lastIdx = 0;
+    for (let i = 0; i < words.length; i++) {
+      if (time >= words[i].end) {
+        lastIdx = i;
+      }
+    }
+    return lastIdx;
   }, [words, time]);
 
   const activeWord = words[activeWordIdx];
