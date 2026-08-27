@@ -40,6 +40,7 @@ export interface YellowScriptCaptionProps {
   fps: number;
   width: number;
   height: number;
+  scale?: number;
   config?: YellowScriptConfig;
 }
 
@@ -50,6 +51,7 @@ export const YellowScriptCaption: React.FC<YellowScriptCaptionProps> = ({
   fps,
   width,
   height,
+  scale: baseScale = 1.0,
   config = defaultYellowScriptConfig,
 }) => {
   if (!activeLine || activeLine.words.length === 0) return null;
@@ -77,10 +79,12 @@ export const YellowScriptCaption: React.FC<YellowScriptCaptionProps> = ({
   });
 
   // Entrance pop scale from 0.8 to 1.05 and back to 1.0
-  const scale = interpolate(popSpring, [0, 0.7, 1], [0.8, 1.05, 1.0], {
+  const popScale = interpolate(popSpring, [0, 0.7, 1], [0.8, 1.05, 1.0], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+
+  const finalScale = popScale * baseScale;
 
   // 2-frame fast fade out at the end of the line duration
   const opacity = interpolate(
@@ -102,7 +106,7 @@ export const YellowScriptCaption: React.FC<YellowScriptCaptionProps> = ({
         position: "absolute",
         left: "50%",
         top: `${config.placementY}%`,
-        transform: `translate(-50%, -50%) scale(${scale})`,
+        transform: `translate(-50%, -50%) scale(${finalScale})`,
         opacity,
         textAlign: "center",
         maxWidth: width * 0.9,

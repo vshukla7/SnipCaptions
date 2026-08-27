@@ -208,6 +208,7 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
           fps={fps}
           width={width}
           height={0}
+          scale={scale}
           config={{
             placementY: position.y,
             topLineFont: '"Celosia Nature", "Caveat", "Kalam", cursive',
