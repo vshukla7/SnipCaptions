@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Header } from "@/components/Header";
 import { DragDropUpload } from "@/components/DragDropUpload";
 import { LanguageSelector } from "@/components/LanguageSelector";
@@ -8,6 +8,7 @@ import { Studio } from "@/components/Studio";
 import { AdBanner, AdInterstitial } from "@/components/Ads";
 import { useApp } from "@/lib/store";
 import { motion } from "framer-motion";
+import { TutorialVideoModal } from "@/components/TutorialVideoModal";
 
 export default function Home() {
   const {
@@ -22,6 +23,19 @@ export default function Home() {
     error,
     statusMessage,
   } = useApp();
+
+  const [isTutorialOpen, setIsTutorialOpen] = useState(false);
+
+  // Auto-open tutorial video modal if API key is not connected
+  useEffect(() => {
+    const saved = localStorage.getItem("sc_api_key");
+    if (!saved) {
+      const timer = setTimeout(() => {
+        setIsTutorialOpen(true);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   const busy = status === "transcribing" || status === "exporting";
   const canGenerate = Boolean(videoFile && hasApiKey) && !busy;
@@ -133,6 +147,10 @@ export default function Home() {
               )}
             </div>
 
+
+
+
+
             {error && (
               <div className="rounded-xl border border-[#FF453A]/20 bg-[#FF453A]/10 p-3 text-[13px] text-[#FF453A]">
                 {error}
@@ -164,6 +182,11 @@ export default function Home() {
           <AdBanner variant="small" label="Bottom Sponsor Banner" />
         </div>
       </footer>
+
+      <TutorialVideoModal
+        open={isTutorialOpen}
+        onClose={() => setIsTutorialOpen(false)}
+      />
     </div>
   );
 }
