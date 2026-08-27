@@ -11,6 +11,7 @@
   "dependencies": {
     "@fontsource-variable/geist": "^5.1.0",
     "@google/genai": "^1.9.0",
+    "@next/third-parties": "^16.3.3",
     "@remotion/media": "^4.0.517",
     "@remotion/player": "^4.0.491",
     "@remotion/web-renderer": "^4.0.491",
