@@ -12,7 +12,8 @@ export type CaptionThemeId =
   | "dual_line_glow"
   | "pw_edits"
   | "mr_beast"
-  | "minimal_blend";
+  | "minimal_blend"
+  | "premiere_glow";
 
 export interface CaptionPosition {
   x: number; // percentage 0 - 100
@@ -53,20 +54,36 @@ export interface CaptionThemeMeta {
 
 export const CAPTION_THEMES: CaptionThemeMeta[] = [
   {
-    id: "clean",
-    name: "Clean Minimal",
-    description: "Crisp white captions, centered, no fuss.",
+    id: "minimal_blend",
+    name: "Minimalist Blend",
+    description: "Ultra-heavy typography stack with smooth slide-ups and difference mix-blend contrast.",
     fontClass: "font-display",
     accent: "#ffffff",
-    wordByWord: false,
+    wordByWord: true,
   },
   {
-    id: "neon",
-    name: "Neon Glow",
-    description: "Electrified glow with a colored halo.",
+    id: "premiere_glow",
+    name: "Premiere Glow",
+    description: "Same as Minimalist Blend, but the biggest word features a Premiere Pro-style neon gradient glow.",
+    fontClass: "font-display",
+    accent: "#FFE600",
+    wordByWord: true,
+  },
+  {
+    id: "dual_line_glow",
+    name: "Dual Line Glow",
+    description: "Bold uppercase top with warm glow reveal + cursive slide-up bottom. Cinema style.",
     fontClass: "font-creative",
-    accent: "#00e5ff",
-    wordByWord: false,
+    accent: "#FFB800",
+    wordByWord: true,
+  },
+  {
+    id: "pw_edits",
+    name: "PW Edits",
+    description: "Montserrat top + Impact crimson bottom with red aura glow and camera push-in zoom.",
+    fontClass: "font-creative",
+    accent: "#FF1E2A",
+    wordByWord: true,
   },
   {
     id: "kinetic",
@@ -91,6 +108,22 @@ export const CAPTION_THEMES: CaptionThemeMeta[] = [
     fontClass: "font-display",
     accent: "#30d158",
     wordByWord: true,
+  },
+  {
+    id: "clean",
+    name: "Clean Minimal",
+    description: "Crisp white captions, centered, no fuss.",
+    fontClass: "font-display",
+    accent: "#ffffff",
+    wordByWord: false,
+  },
+  {
+    id: "neon",
+    name: "Neon Glow",
+    description: "Electrified glow with a colored halo.",
+    fontClass: "font-creative",
+    accent: "#00e5ff",
+    wordByWord: false,
   },
   {
     id: "black_punch",
@@ -133,35 +166,11 @@ export const CAPTION_THEMES: CaptionThemeMeta[] = [
     wordByWord: true,
   },
   {
-    id: "dual_line_glow",
-    name: "Dual Line Glow",
-    description: "Bold uppercase top with warm glow reveal + cursive slide-up bottom. Cinema style.",
-    fontClass: "font-creative",
-    accent: "#FFB800",
-    wordByWord: true,
-  },
-  {
-    id: "pw_edits",
-    name: "PW Edits",
-    description: "Montserrat top + Impact crimson bottom with red aura glow and camera push-in zoom.",
-    fontClass: "font-creative",
-    accent: "#FF1E2A",
-    wordByWord: true,
-  },
-  {
     id: "mr_beast",
     name: "MrBeast Style",
     description: "Futura/Bebas bold uppercase with thick black outline, shadow, fast pops, and yellow highlight.",
     fontClass: "font-creative",
     accent: "#FFE600",
-    wordByWord: true,
-  },
-  {
-    id: "minimal_blend",
-    name: "Minimalist Blend",
-    description: "Ultra-heavy typography stack with smooth slide-ups and difference mix-blend contrast.",
-    fontClass: "font-display",
-    accent: "#ffffff",
     wordByWord: true,
   },
 ];

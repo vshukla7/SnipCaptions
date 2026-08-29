@@ -1,11 +1,12 @@
 /**
- * MinimalBlendTemplate — Minimalist Blend style
+ * PremiereGlowTemplate — Premiere Pro styled glow captions
  *
  * Captions rendered in a neat, left-aligned block on the video:
  *   • Ultra-heavy Neue Haas Grotesk / Helvetica Neue typography
- *   • Smooth, eased spring slide-up animations (damping: 18)
- *   • Smart Hero / Key words rendered extra-large in UPPERCASE
- *   • Mix-blend-mode "difference" on Hero words to dynamically invert against video frames
+ *   • Pre-rendered layout structure (no layout shift/word jumping)
+ *   • Smooth, eased spring slide-up animations
+ *   • The biggest (hero) word is highlighted in UPPERCASE, styled with a
+ *     vibrant Premiere Pro-style text gradient and multi-layered neon glow.
  */
 
 import React from "react";
@@ -14,12 +15,13 @@ import type { TemplateProps } from "./types";
 
 const DEFAULT_FONT = '"Neue Haas Grotesk Display Pro", "Helvetica Neue", "Syne", sans-serif';
 
-export const MinimalBlendTemplate: React.FC<TemplateProps> = ({
+export const PremiereGlowTemplate: React.FC<TemplateProps> = ({
   activeLine,
   frame,
   fps,
   width,
   fontSize,
+  accentColor,
   customFontFamily,
 }) => {
   if (!activeLine || !activeLine.words.length) return null;
@@ -33,6 +35,7 @@ export const MinimalBlendTemplate: React.FC<TemplateProps> = ({
   );
 
   const activeFont = customFontFamily || DEFAULT_FONT;
+  const accent = accentColor || "#FFE600"; // Premiere Pro gold accent
 
   // Dynamic scaling for font size configurations
   const normalSize = Math.round(fontSize * 0.9);   // ~62px
@@ -64,7 +67,7 @@ export const MinimalBlendTemplate: React.FC<TemplateProps> = ({
           config: {
             mass: 0.8,
             stiffness: 180,
-            damping: 18, // Smooth ease without heavy bounce
+            damping: 18,
           },
         });
 
@@ -80,22 +83,32 @@ export const MinimalBlendTemplate: React.FC<TemplateProps> = ({
         // Determine if word is highlighted as Big
         const isBig = (w as any).isBig ?? (w.word === longestWord.word);
         const wordSize = isBig ? bigSize : normalSize;
-        const isBlendDifference = isBig;
+
+        // Premiere Pro styled gradient and glow configuration
+        const gradientBackground = isBig
+          ? `linear-gradient(135deg, #FFF9C4 0%, ${accent} 50%, #FF3D00 100%)`
+          : undefined;
+
+        const glowFilter = isBig
+          ? `drop-shadow(0px 0px 8px ${accent}) drop-shadow(0px 0px 24px #FF3D00) drop-shadow(0px 4px 12px rgba(0,0,0,0.6))`
+          : "drop-shadow(0px 4px 12px rgba(0,0,0,0.5))";
 
         return (
           <span
-            key={`minimal-word-${index}`}
+            key={`premiere-word-${index}`}
             style={{
               display: "inline-block",
               transform: `translateY(${translateY}px)`,
               opacity: isSpoken ? opacity : 0,
               visibility: isSpoken ? "visible" : "hidden",
               fontSize: wordSize,
-              color: "#FFFFFF",
-              // Mix-blend mode difference implementation
-              mixBlendMode: isBlendDifference ? "difference" : "normal",
+              color: isBig ? "transparent" : "#FFFFFF",
+              backgroundImage: gradientBackground,
+              backgroundClip: isBig ? "text" : undefined,
+              WebkitBackgroundClip: isBig ? "text" : undefined,
+              WebkitTextFillColor: isBig ? "transparent" : undefined,
               textTransform: isBig ? "uppercase" : "capitalize",
-              filter: "drop-shadow(0px 4px 12px rgba(0,0,0,0.5))",
+              filter: glowFilter,
               willChange: "transform, opacity",
               pointerEvents: "none",
             }}

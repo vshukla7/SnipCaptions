@@ -43,7 +43,7 @@ export function Header() {
               <span className="sm:hidden">+ Video</span>
             </button>
           )}
-          {/* Commented out for development only: */}
+          
           {/* {!showStudio && (
             <button
               onClick={openDemoStudio}

@@ -22,6 +22,7 @@ import { DualLineGlowTemplate } from "./templates/DualLineGlowTemplate";
 import { PWEditsTemplate } from "./templates/PWEditsTemplate";
 import { MrBeastTemplate } from "./templates/MrBeastTemplate";
 import { MinimalBlendTemplate } from "./templates/MinimalBlendTemplate";
+import { PremiereGlowTemplate } from "./templates/PremiereGlowTemplate"; // Force reload
 
 export interface CaptionCompositionProps {
   src: string;
@@ -77,6 +78,7 @@ const FONT_FOR_THEME: Record<CaptionThemeId, string> = {
   pw_edits: '"Montserrat", "Poppins", sans-serif',
   mr_beast: '"Bebas Neue", "Futura-Bold", "Impact", sans-serif',
   minimal_blend: '"Neue Haas Grotesk Display Pro", "Helvetica Neue", "Syne", sans-serif',
+  premiere_glow: '"Neue Haas Grotesk Display Pro", "Helvetica Neue", "Syne", sans-serif',
 };
 
 export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
@@ -141,6 +143,7 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
   }, [words, activeWordIdx]);
 
   // Debug: log mount + sparse active-line changes (avoids per-frame spam).
+  /* eslint-disable react-hooks/refs */
   const mounted = React.useRef(false);
   const lastLine = React.useRef(-1);
   if (!mounted.current) {
@@ -151,6 +154,7 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
     lastLine.current = activeIndex;
     console.log("[SnipCaptions:caption] frame=", frame, "time=", time.toFixed(2) + "s", "activeLine=", activeIndex, activeLine ? `→ "${activeLine.text}"` : "");
   }
+  /* eslint-enable react-hooks/refs */
 
   const baseFont = customFontFamily || FONT_FOR_THEME[theme];
   const fontSize = Math.round(width * 0.062);
@@ -237,6 +241,8 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
     captionContent = <MrBeastTemplate {...templateProps} />;
   } else if (theme === "minimal_blend") {
     captionContent = <MinimalBlendTemplate {...templateProps} />;
+  } else if (theme === "premiere_glow") {
+    captionContent = <PremiereGlowTemplate {...templateProps} />;
   }
 
   return (
