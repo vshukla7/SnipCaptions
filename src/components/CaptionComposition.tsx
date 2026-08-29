@@ -20,6 +20,8 @@ import { YellowScriptCaption } from "./templates/YellowScriptCaption";
 import { Kinetic01Template } from "./templates/Kinetic01Template";
 import { DualLineGlowTemplate } from "./templates/DualLineGlowTemplate";
 import { PWEditsTemplate } from "./templates/PWEditsTemplate";
+import { MrBeastTemplate } from "./templates/MrBeastTemplate";
+import { MinimalBlendTemplate } from "./templates/MinimalBlendTemplate";
 
 export interface CaptionCompositionProps {
   src: string;
@@ -73,6 +75,8 @@ const FONT_FOR_THEME: Record<CaptionThemeId, string> = {
   kinetic_01: '"Gilroy", "Helvetica Neue", sans-serif',
   dual_line_glow: '"Gilroy", "Helvetica Neue", sans-serif',
   pw_edits: '"Montserrat", "Poppins", sans-serif',
+  mr_beast: '"Bebas Neue", "Futura-Bold", "Impact", sans-serif',
+  minimal_blend: '"Neue Haas Grotesk Display Pro", "Helvetica Neue", "Syne", sans-serif',
 };
 
 export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
@@ -229,6 +233,10 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
     captionContent = <DualLineGlowTemplate {...templateProps} />;
   } else if (theme === "pw_edits") {
     captionContent = <PWEditsTemplate {...templateProps} />;
+  } else if (theme === "mr_beast") {
+    captionContent = <MrBeastTemplate {...templateProps} />;
+  } else if (theme === "minimal_blend") {
+    captionContent = <MinimalBlendTemplate {...templateProps} />;
   }
 
   return (

@@ -10,7 +10,9 @@ export type CaptionThemeId =
   | "yellow_script"
   | "kinetic_01"
   | "dual_line_glow"
-  | "pw_edits";
+  | "pw_edits"
+  | "mr_beast"
+  | "minimal_blend";
 
 export interface CaptionPosition {
   x: number; // percentage 0 - 100
@@ -144,6 +146,22 @@ export const CAPTION_THEMES: CaptionThemeMeta[] = [
     description: "Montserrat top + Impact crimson bottom with red aura glow and camera push-in zoom.",
     fontClass: "font-creative",
     accent: "#FF1E2A",
+    wordByWord: true,
+  },
+  {
+    id: "mr_beast",
+    name: "MrBeast Style",
+    description: "Futura/Bebas bold uppercase with thick black outline, shadow, fast pops, and yellow highlight.",
+    fontClass: "font-creative",
+    accent: "#FFE600",
+    wordByWord: true,
+  },
+  {
+    id: "minimal_blend",
+    name: "Minimalist Blend",
+    description: "Ultra-heavy typography stack with smooth slide-ups and difference mix-blend contrast.",
+    fontClass: "font-display",
+    accent: "#ffffff",
     wordByWord: true,
   },
 ];
