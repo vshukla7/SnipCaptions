@@ -43,8 +43,8 @@ export function Header() {
               <span className="sm:hidden">+ Video</span>
             </button>
           )}
-          Commented out for development only:
-          {!showStudio && (
+          {/* Commented out for development only: */}
+          {/* {!showStudio && (
             <button
               onClick={openDemoStudio}
               className="rounded-full bg-[#2997FF]/10 border border-[#2997FF]/30 px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 text-[12px] font-semibold text-[#2997FF] transition-all hover:bg-[#2997FF]/20"
@@ -52,7 +52,7 @@ export function Header() {
               <span className="hidden sm:inline">Studio Preview</span>
               <span className="sm:hidden">Preview</span>
             </button>
-          )}
+          )} */}
          
 
           <button
