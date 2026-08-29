@@ -9,7 +9,8 @@ export type CaptionThemeId =
   | "one_word"
   | "yellow_script"
   | "kinetic_01"
-  | "dual_line_glow";
+  | "dual_line_glow"
+  | "pw_edits";
 
 export interface CaptionPosition {
   x: number; // percentage 0 - 100
@@ -135,6 +136,14 @@ export const CAPTION_THEMES: CaptionThemeMeta[] = [
     description: "Bold uppercase top with warm glow reveal + cursive slide-up bottom. Cinema style.",
     fontClass: "font-creative",
     accent: "#FFB800",
+    wordByWord: true,
+  },
+  {
+    id: "pw_edits",
+    name: "PW Edits",
+    description: "Montserrat top + Impact crimson bottom with red aura glow and camera push-in zoom.",
+    fontClass: "font-creative",
+    accent: "#FF1E2A",
     wordByWord: true,
   },
 ];

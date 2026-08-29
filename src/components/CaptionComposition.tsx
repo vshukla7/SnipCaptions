@@ -19,6 +19,7 @@ import { OneWordTemplate } from "./templates/OneWordTemplate";
 import { YellowScriptCaption } from "./templates/YellowScriptCaption";
 import { Kinetic01Template } from "./templates/Kinetic01Template";
 import { DualLineGlowTemplate } from "./templates/DualLineGlowTemplate";
+import { PWEditsTemplate } from "./templates/PWEditsTemplate";
 
 export interface CaptionCompositionProps {
   src: string;
@@ -71,6 +72,7 @@ const FONT_FOR_THEME: Record<CaptionThemeId, string> = {
   yellow_script: '"SF Pro Display", "Inter", sans-serif',
   kinetic_01: '"Gilroy", "Helvetica Neue", sans-serif',
   dual_line_glow: '"Gilroy", "Helvetica Neue", sans-serif',
+  pw_edits: '"Montserrat", "Poppins", sans-serif',
 };
 
 export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
@@ -225,6 +227,8 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
     captionContent = <Kinetic01Template {...templateProps} />;
   } else if (theme === "dual_line_glow") {
     captionContent = <DualLineGlowTemplate {...templateProps} />;
+  } else if (theme === "pw_edits") {
+    captionContent = <PWEditsTemplate {...templateProps} />;
   }
 
   return (

@@ -43,7 +43,7 @@ export function Header() {
               <span className="sm:hidden">+ Video</span>
             </button>
           )}
-          {/* Commented out for development only:
+          Commented out for development only:
           {!showStudio && (
             <button
               onClick={openDemoStudio}
@@ -53,7 +53,7 @@ export function Header() {
               <span className="sm:hidden">Preview</span>
             </button>
           )}
-          */}
+         
 
           <button
             onClick={() => setGuideModalOpen(true)}
