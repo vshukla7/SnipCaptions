@@ -142,19 +142,7 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
     return items.join(" ");
   }, [words, activeWordIdx]);
 
-  // Debug: log mount + sparse active-line changes (avoids per-frame spam).
-  /* eslint-disable react-hooks/refs */
-  const mounted = React.useRef(false);
-  const lastLine = React.useRef(-1);
-  if (!mounted.current) {
-    mounted.current = true;
-    console.log("[SnipCaptions:caption] mount · theme=", theme, "lines=", lines.length, "fps=", fps, "width=", width);
-  }
-  if (activeIndex !== lastLine.current) {
-    lastLine.current = activeIndex;
-    console.log("[SnipCaptions:caption] frame=", frame, "time=", time.toFixed(2) + "s", "activeLine=", activeIndex, activeLine ? `→ "${activeLine.text}"` : "");
-  }
-  /* eslint-enable react-hooks/refs */
+
 
   const baseFont = customFontFamily || FONT_FOR_THEME[theme];
   const fontSize = Math.round(width * 0.062);

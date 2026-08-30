@@ -5,6 +5,7 @@ import { Player, PlayerRef } from "@remotion/player";
 import { useApp } from "@/lib/store";
 import { CAPTION_THEMES } from "@/lib/types";
 import { CaptionComposition } from "./CaptionComposition";
+import { ExportResolutionModal } from "./ExportResolutionModal";
 
 const FPS = 30;
 
@@ -360,6 +361,7 @@ export function Studio() {
   const [naturalAspect, setNaturalAspect] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"templates" | "settings" | "transcript">("templates");
   const [exportResolution, setExportResolution] = useState<"1080p" | "720p" | "540p">("1080p");
+  const [showExportModal, setShowExportModal] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
 
   // Auto detect mobile device to default to 720p resolution
@@ -624,6 +626,7 @@ export function Studio() {
         audioBitrate: "medium",
         hardwareAcceleration: "prefer-hardware",
         muted: isMuted,
+        delayRenderTimeoutInMilliseconds: 80000,
         signal: controller.signal,
         onProgress: (p: unknown) => {
           const value = typeof p === "number" ? p : (p as { progress?: number })?.progress ?? 0;
@@ -804,7 +807,7 @@ export function Studio() {
           </button>
 
           <button
-            onClick={handleExport}
+            onClick={() => setShowExportModal(true)}
             disabled={exporting || !ready}
             title="Export Video with Captions"
             className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#2997FF] to-[#0066CC] px-3 py-1.5 sm:px-4 sm:py-1.5 text-[13px] font-semibold text-white shadow-lg shadow-[#2997FF]/25 transition-all disabled:opacity-40"
@@ -1189,38 +1192,6 @@ export function Studio() {
                   </div>
 
                   {/* Export Resolution Selector */}
-                  <div className="space-y-2 border-t border-white/[0.04] pt-4">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-white/40">
-                        Export Resolution
-                      </label>
-                      <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] font-mono text-white/40">
-                        {exportResolution === "1080p" ? "Full HD" : exportResolution === "720p" ? "HD" : "Standard"}
-                      </span>
-                    </div>
-                    <div className="grid grid-cols-3 gap-1 rounded-xl bg-white/[0.04] p-1 border border-white/[0.08]">
-                      {(["1080p", "720p", "540p"] as const).map((res) => {
-                        const active = exportResolution === res;
-                        return (
-                          <button
-                            key={res}
-                            type="button"
-                            onClick={() => setExportResolution(res)}
-                            className={`rounded-lg py-1.5 text-center text-[12px] font-semibold transition-all ${
-                              active
-                                ? "bg-[#2997FF] text-white shadow"
-                                : "text-white/60 hover:bg-white/[0.04] hover:text-white"
-                            }`}
-                          >
-                            {res}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="text-[10px] text-white/30 leading-normal">
-                      Lower resolutions (720p/540p) export significantly faster and are recommended for mobile devices to prevent memory crashes.
-                    </p>
-                  </div>
                 </div>
               </div>
             )}
@@ -1296,6 +1267,15 @@ export function Studio() {
           </button>
         </div>
       )}
+
+      {/* Export Options Resolution Modal */}
+      <ExportResolutionModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        resolution={exportResolution}
+        onChangeResolution={setExportResolution}
+        onProceed={handleExport}
+      />
     </div>
   );
 }
