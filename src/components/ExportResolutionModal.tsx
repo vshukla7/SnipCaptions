@@ -7,14 +7,14 @@ import { motion, AnimatePresence } from "framer-motion";
 export function ExportResolutionModal({
   open,
   onClose,
-  resolution,
-  onChangeResolution,
+  originalWidth,
+  originalHeight,
   onProceed,
 }: {
   open: boolean;
   onClose: () => void;
-  resolution: "1080p" | "720p" | "540p";
-  onChangeResolution: (res: "1080p" | "720p" | "540p") => void;
+  originalWidth: number;
+  originalHeight: number;
   onProceed: () => void;
 }) {
   const [mounted, setMounted] = useState(false);
@@ -65,32 +65,19 @@ export function ExportResolutionModal({
             </div>
 
             <p className="text-[13px] text-white/50 mb-5 leading-normal">
-              Select the desired resolution for your exported video. Higher resolutions offer sharper output but take longer and consume more device resources.
+              Your video will be exported in its original uploaded quality for the best visual experience.
             </p>
 
             {/* Resolution Profile Selection */}
             <div className="space-y-2 mb-5">
               <label className="text-[11px] font-bold uppercase tracking-wider text-white/40">
-                Resolution Profile
+                Export Quality (Original)
               </label>
-              <div className="grid grid-cols-3 gap-1 rounded-2xl bg-white/[0.04] p-1 border border-white/[0.08]">
-                {(["1080p", "720p", "540p"] as const).map((res) => {
-                  const active = resolution === res;
-                  return (
-                    <button
-                      key={res}
-                      type="button"
-                      onClick={() => onChangeResolution(res)}
-                      className={`rounded-xl py-1.5 text-center text-[11px] font-bold transition-all ${
-                        active
-                          ? "bg-[#2997FF] text-white shadow-lg shadow-[#2997FF]/15"
-                          : "text-white/60 hover:bg-white/[0.04] hover:text-white"
-                      }`}
-                    >
-                      {res}
-                    </button>
-                  );
-                })}
+              <div className="rounded-2xl bg-white/[0.04] px-4 py-3 border border-white/[0.08] flex items-center justify-between">
+                <span className="text-[13px] font-bold text-white">Original Quality</span>
+                <span className="text-[12px] font-semibold text-[#2997FF] bg-[#2997FF]/10 px-2.5 py-0.5 rounded-full">
+                  {originalWidth} x {originalHeight}
+                </span>
               </div>
             </div>
 

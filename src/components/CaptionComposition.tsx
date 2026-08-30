@@ -33,6 +33,7 @@ export interface CaptionCompositionProps {
   position?: CaptionPosition;
   scale?: number;
   customFontFamily?: string | null;
+  mutedVideo?: boolean;
 }
 
 interface Line {
@@ -90,6 +91,7 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
   position = { x: 50, y: 80 },
   scale = 1.0,
   customFontFamily,
+  mutedVideo = false,
 }) => {
   const frame = useCurrentFrame();
   const { fps, width } = useVideoConfig();
@@ -190,6 +192,7 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
           <Video
             src={src}
             style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            muted={mutedVideo}
           />
         ) : (
           <AbsoluteFill style={{ backgroundColor: "#121214", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -239,6 +242,7 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
         <Video
           src={src}
           style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          muted={mutedVideo}
         />
       ) : (
         <AbsoluteFill

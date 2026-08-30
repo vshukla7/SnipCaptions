@@ -333,8 +333,9 @@ export function Studio() {
     videoFile,
     videoUrl,
     originalVideoUrl,
+    originalWidth,
+    originalHeight,
     proxyStatus,
-    isHevc,
     proxyToast,
     clearProxyToast,
     words: storeWords,
@@ -365,19 +366,15 @@ export function Studio() {
   const [exporting, setExporting] = useState(false);
   const [naturalAspect, setNaturalAspect] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"templates" | "settings" | "transcript">("templates");
-  const [exportResolution, setExportResolution] = useState<"1080p" | "720p" | "540p">("1080p");
   const [showExportModal, setShowExportModal] = useState(false);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
 
-  // Auto detect mobile device to default to 720p resolution
+  // Auto detect mobile device
   useEffect(() => {
     if (typeof window !== "undefined") {
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
       setIsMobileDevice(isMobile);
-      if (isMobile) {
-        setExportResolution("720p");
-      }
     }
   }, []);
 
@@ -492,23 +489,9 @@ export function Studio() {
 
   // Render/Export dimensions must be multiples of 2 (even numbers) for H.264 WebCodecs
   const getRenderDimensions = () => {
-    let baseWidth = 1080;
-    if (exportResolution === "720p") baseWidth = 720;
-    else if (exportResolution === "540p") baseWidth = 540;
-
-    let baseHeight = 1920;
-    if (exportResolution === "720p") baseHeight = 1280;
-    else if (exportResolution === "540p") baseHeight = 960;
-
-    if (naturalAspect && naturalAspect > 1) {
-      const w = exportResolution === "1080p" ? 1920 : exportResolution === "720p" ? 1280 : 960;
-      const h = Math.round(Math.round(w / naturalAspect) / 2) * 2;
-      return { width: w, height: h };
-    } else {
-      const w = baseWidth;
-      const h = naturalAspect ? Math.round(Math.round(w / naturalAspect) / 2) * 2 : baseHeight;
-      return { width: w, height: h };
-    }
+    const w = Math.round(originalWidth / 2) * 2;
+    const h = Math.round(originalHeight / 2) * 2;
+    return { width: w, height: h };
   };
 
   const { width: renderWidth, height: renderHeight } = getRenderDimensions();
@@ -617,17 +600,7 @@ export function Studio() {
       }
 
       // 2. Determine export source video URL:
-      // If the original video is HEVC/H.265, browser canvas seek/frame-extraction will freeze at 1% progress.
-      // We fall back to the H.264 720p proxy videoUrl (which has audio) to ensure the render finishes successfully.
-      const exportSrc = isHevc ? (videoUrl || originalVideoUrl || "") : (originalVideoUrl || videoUrl || "");
-
-      if (isHevc) {
-        console.log("[Studio] HEVC video detected. Exporting using H.264 proxy to prevent WebCodecs/HTML5 canvas seek freeze.");
-        setToast({
-          type: "warning",
-          message: "Original video is in HEVC format. Exporting using the optimized 720p H.264 preview to prevent browser freeze."
-        });
-      }
+      const exportSrc = originalVideoUrl || videoUrl || "";
       const { getBlob } = await renderMediaOnWeb({
         composition: {
           id: "snipcaptions",
@@ -645,6 +618,7 @@ export function Studio() {
           position: captionPosition,
           scale: captionScale,
           customFontFamily,
+          mutedVideo: isMuted,
         },
         container: "mp4",
         videoBitrate: "medium",
@@ -899,6 +873,7 @@ export function Studio() {
                     width: "100%",
                     height: "100%",
                   }}
+                  acknowledgeRemotionLicense
                 />
 
                 {/* Proxy generation progress pill — visible while FFmpeg transcodes the 480p preview */}
@@ -1330,8 +1305,8 @@ export function Studio() {
       <ExportResolutionModal
         open={showExportModal}
         onClose={() => setShowExportModal(false)}
-        resolution={exportResolution}
-        onChangeResolution={setExportResolution}
+        originalWidth={originalWidth}
+        originalHeight={originalHeight}
         onProceed={handleExport}
       />
     </div>

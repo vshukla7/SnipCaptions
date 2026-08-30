@@ -18,6 +18,7 @@ import type {
   Word,
 } from "./types";
 import { transcribeVideo } from "./gemini";
+import { detectH264Codec } from "./utils";
 
 // ─── Proxy status ──────────────────────────────────────────────────────────────
 export type ProxyStatus = "idle" | "generating" | "ready" | "failed";
@@ -32,11 +33,12 @@ interface AppContextValue {
   videoUrl: string | null;
   /** Always the full-quality original blob URL — use this for export */
   originalVideoUrl: string | null;
+  originalWidth: number;
+  originalHeight: number;
   setVideo: (f: File | null) => void;
 
   proxyStatus: ProxyStatus;
   proxyProgress: number;
-  isHevc: boolean;
 
   /** Fire-and-forget toast from the proxy engine. Studio watches this to show a UI toast. */
   proxyToast: { type: "warning" | "error"; message: string } | null;
@@ -101,9 +103,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [originalVideoUrl, setOriginalVideoUrl] = useState<string | null>(null);
+  const [originalWidth, setOriginalWidth] = useState<number>(1080);
+  const [originalHeight, setOriginalHeight] = useState<number>(1920);
   const [proxyStatus, setProxyStatus] = useState<ProxyStatus>("idle");
   const [needsProxy, setNeedsProxy] = useState(false);
-  const [isHevc, setIsHevc] = useState(false);
   const [proxyProgress, setProxyProgress] = useState(0);
   const [proxyToast, setProxyToast] = useState<{ type: "warning" | "error"; message: string } | null>(null);
 
@@ -184,26 +187,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // the encode step itself is never aborted — it always runs to completion.
   const generateProxy = useCallback(async (file: File, originalUrl: string, videoDuration: number) => {
     // Determine target resolution based on mobile vs desktop.
-    // Transcoding to 720p H.264 on mobile frequently causes Out of Memory (OOM) / Web Worker crashes
-    // due to iOS/Android browser memory limits. We fall back to 480p on mobile to ensure stability.
+    // Transcoding to 1080p H.264 on mobile frequently causes Out of Memory (OOM) / Web Worker crashes
+    // due to iOS/Android browser memory limits. We fall back to 540p on mobile to ensure stability.
     const isMobile = typeof window !== "undefined" && (
       /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768
     );
-    const targetScale = isMobile ? "scale=-2:480" : "scale=-2:720";
-    const resName = isMobile ? "480p" : "720p";
+    const targetScale = isMobile ? "scale=-2:540,fps=24" : "scale=-2:720,fps=24";
+    const resName = isMobile ? "540p" : "720p";
 
     console.log(`[SnipCaptions:proxy] Starting ${resName} proxy generation for`, file.name, `(${videoDuration.toFixed(1)}s)`);
     setProxyStatus("generating");
 
     // Abort controller covers both WASM load and transcoding run.
     const globalAbortCtrl = new AbortController();
-
-    // Set a global safety timeout. If proxy generation takes > 25 seconds, we force abort it
-    // so the loading screen never hangs on mobile devices.
-    const globalTimeoutId = setTimeout(() => {
-      console.warn("[SnipCaptions:proxy] Global safety timeout fired (25s limit). Aborting FFmpeg.");
-      globalAbortCtrl.abort();
-    }, 25_000);
 
     const loadAbortCtrl = new AbortController();
     const loadTimeoutId = setTimeout(() => {
@@ -220,14 +216,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       ffmpegInstance.on("log", ({ message }) => {
         console.log("[FFmpeg:proxy]", message);
-        if (
-          message.includes("Video: hevc") ||
-          message.includes("Video: h265") ||
-          message.includes("hvc1")
-        ) {
-          console.log("[SnipCaptions:proxy] Detected HEVC/H.265 input stream.");
-          setIsHevc(true);
-        }
       });
 
       ffmpegInstance.on("progress", ({ progress }) => {
@@ -269,7 +257,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         "-c:v", "libx264",
         "-c:a", "copy",
         "-preset", "ultrafast",
-        "-crf", "28",
+        "-crf", "32",
+        "-tune", "fastdecode",
         "-movflags", "faststart",
         "proxy_output.mp4",
       ], -1, { signal: globalAbortCtrl.signal }); // wire global abort signal here to safely kill hanging execs on mobile OOM
@@ -290,7 +279,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ffmpegInstance.terminate();
       ffmpegInstance = null;
 
-      clearTimeout(globalTimeoutId);
+
 
       // Revoke old proxy if one existed
       if (proxyUrlRef.current) {
@@ -305,7 +294,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     } catch (err) {
       clearTimeout(loadTimeoutId);
-      clearTimeout(globalTimeoutId);
 
       // Cleanup FFmpeg instance if still alive
       if (ffmpegInstance) {
@@ -327,7 +315,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ─── setVideo ───────────────────────────────────────────────────────────────
-  const setVideo = useCallback((f: File | null) => {
+  const setVideo = useCallback(async (f: File | null) => {
     // Revoke previous blob URLs
     if (proxyUrlRef.current) {
       URL.revokeObjectURL(proxyUrlRef.current);
@@ -344,12 +332,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setOriginalVideoUrl(null);
       setProxyStatus("idle");
       setNeedsProxy(false);
-      setIsHevc(false);
       setProxyProgress(0);
       setProxyToast(null);
       setTranscription(null);
       setDurationInSeconds(0);
       setStatus("idle");
+      setOriginalWidth(1080);
+      setOriginalHeight(1920);
+      return;
+    }
+
+    setError(null);
+    setStatus("idle");
+    try {
+      const isH264 = await detectH264Codec(f);
+      if (!isH264) {
+        setError("Only H.264 (AVC) encoded videos are accepted. Please convert your video and try again.");
+        setVideoFile(null);
+        setVideoUrl(null);
+        setOriginalVideoUrl(null);
+        setProxyStatus("failed");
+        return;
+      }
+    } catch (err) {
+      setError("Failed to verify video codec. Please ensure it is a valid H.264 video.");
       return;
     }
 
@@ -361,7 +367,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setOriginalVideoUrl(url);   // export always uses this
     setProxyStatus("idle");
     setNeedsProxy(false);
-    setIsHevc(false);
     setProxyProgress(0);
     setTranscription(null);
     setStatus("idle");
@@ -382,6 +387,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const duration = probe.duration || 0;
       const w = probe.videoWidth;
       const h = probe.videoHeight;
+
+      setOriginalWidth(w);
+      setOriginalHeight(h);
 
       console.log(
         "[SnipCaptions:store] video metadata · duration=", duration,
@@ -533,10 +541,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     videoFile,
     videoUrl,
     originalVideoUrl,
+    originalWidth,
+    originalHeight,
     setVideo,
     proxyStatus,
     proxyProgress,
-    isHevc,
     proxyToast,
     clearProxyToast,
     language,
