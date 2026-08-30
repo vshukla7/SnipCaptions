@@ -332,6 +332,11 @@ export function Studio() {
   const {
     videoFile,
     videoUrl,
+    originalVideoUrl,
+    proxyStatus,
+    isHevc,
+    proxyToast,
+    clearProxyToast,
     words: storeWords,
     captionTheme,
     captionPosition,
@@ -382,6 +387,13 @@ export function Studio() {
     const timer = setTimeout(() => setToast(null), 6000);
     return () => clearTimeout(timer);
   }, [toast]);
+
+  // Surface proxy engine warnings as Studio toasts
+  useEffect(() => {
+    if (!proxyToast) return;
+    setToast({ type: proxyToast.type, message: proxyToast.message });
+    clearProxyToast();
+  }, [proxyToast, clearProxyToast]);
 
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<PlayerRef>(null);
@@ -604,7 +616,18 @@ export function Studio() {
         }
       }
 
-      // 2. Execute renderMediaOnWeb
+      // 2. Determine export source video URL:
+      // If the original video is HEVC/H.265, browser canvas seek/frame-extraction will freeze at 1% progress.
+      // We fall back to the H.264 720p proxy videoUrl (which has audio) to ensure the render finishes successfully.
+      const exportSrc = isHevc ? (videoUrl || originalVideoUrl || "") : (originalVideoUrl || videoUrl || "");
+
+      if (isHevc) {
+        console.log("[Studio] HEVC video detected. Exporting using H.264 proxy to prevent WebCodecs/HTML5 canvas seek freeze.");
+        setToast({
+          type: "warning",
+          message: "Original video is in HEVC format. Exporting using the optimized 720p H.264 preview to prevent browser freeze."
+        });
+      }
       const { getBlob } = await renderMediaOnWeb({
         composition: {
           id: "snipcaptions",
@@ -615,7 +638,7 @@ export function Studio() {
           height: aspectH,
         } as never,
         inputProps: {
-          src: videoUrl || "",
+          src: exportSrc,
           words,
           theme: captionTheme,
           accentColor: accent,
@@ -877,6 +900,27 @@ export function Studio() {
                     height: "100%",
                   }}
                 />
+
+                {/* Proxy generation progress pill — visible while FFmpeg transcodes the 480p preview */}
+                {proxyStatus === "generating" && (
+                  <div
+                    className="absolute bottom-14 left-3 z-30 flex items-center gap-2 rounded-full border border-white/10 bg-black/70 px-3 py-1.5 shadow-lg backdrop-blur-md"
+                    style={{ animation: "fadeInUp 0.3s ease" }}
+                  >
+                    {/* Spinning ring */}
+                    <svg
+                      className="h-3.5 w-3.5 shrink-0 animate-spin text-[#2997FF]"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                    >
+                      <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                    <span className="text-[11px] font-medium text-white/80">
+                      Optimizing preview…
+                    </span>
+                  </div>
+                )}
 
                 {/* Invisible clickable captions hotspot (Active both playing and paused) */}
                 {playerDims.width > 0 && playerDims.height > 0 && (

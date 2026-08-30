@@ -22,6 +22,7 @@ export default function Home() {
     openDemoStudio,
     error,
     statusMessage,
+    proxyStatus,
   } = useApp();
 
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
@@ -91,9 +92,10 @@ export default function Home() {
       {/* Ad Interstitial Overlay during caption generation */}
       <AdInterstitial
         open={status === "transcribing"}
-        title="Generating captions..."
+        title={proxyStatus === "generating" && progress >= 0.95 ? "Processing your proxy video..." : "Generating captions..."}
         progress={progress}
         words={wordsSoFar}
+        hideProgressPercent={proxyStatus === "generating" && progress >= 0.95}
       />
 
       {/* Ad Interstitial Overlay during video export */}

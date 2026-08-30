@@ -38,6 +38,7 @@ export type AppStatus =
   | "transcribing"
   | "ready"
   | "exporting"
+  | "proxy_generating"
   | "error";
 
 export interface CaptionThemeMeta {

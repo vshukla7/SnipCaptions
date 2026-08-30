@@ -45,11 +45,13 @@ export function AdInterstitial({
   title = "Processing...",
   progress = 0,
   words,
+  hideProgressPercent = false,
 }: {
   open: boolean;
   title?: string;
   progress?: number;
   words?: number;
+  hideProgressPercent?: boolean;
 }) {
   if (!open) return null;
   const pct = Math.round((progress ?? 0) * 100);
@@ -77,7 +79,10 @@ export function AdInterstitial({
           <div className="flex items-center justify-between text-[13px] font-medium text-white/80">
             <span>{title}</span>
             <span className="font-mono text-[#2997FF]">
-              {pct}%{words ? ` · ${words} words` : ""}
+              {hideProgressPercent
+                ? (words ? `${words} words` : "")
+                : `${pct}%${words ? ` · ${words} words` : ""}`
+              }
             </span>
           </div>
 
