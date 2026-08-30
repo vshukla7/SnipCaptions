@@ -183,11 +183,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // `videoDuration` is used to compute an adaptive WASM-load-only timeout;
   // the encode step itself is never aborted — it always runs to completion.
   const generateProxy = useCallback(async (file: File, originalUrl: string, videoDuration: number) => {
-    console.log("[SnipCaptions:proxy] Starting 480p proxy generation for", file.name, `(${videoDuration.toFixed(1)}s)`);
+    // Determine target resolution based on mobile vs desktop.
+    // Transcoding to 720p H.264 on mobile frequently causes Out of Memory (OOM) / Web Worker crashes
+    // due to iOS/Android browser memory limits. We fall back to 480p on mobile to ensure stability.
+    const isMobile = typeof window !== "undefined" && (
+      /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768
+    );
+    const targetScale = isMobile ? "scale=-2:480" : "scale=-2:720";
+    const resName = isMobile ? "480p" : "720p";
+
+    console.log(`[SnipCaptions:proxy] Starting ${resName} proxy generation for`, file.name, `(${videoDuration.toFixed(1)}s)`);
     setProxyStatus("generating");
 
-    // Abort controller covers only the WASM CDN fetch phase.
-    // Once exec() begins we never abort — let the encode finish naturally.
+    // Abort controller covers both WASM load and transcoding run.
+    const globalAbortCtrl = new AbortController();
+
+    // Set a global safety timeout. If proxy generation takes > 25 seconds, we force abort it
+    // so the loading screen never hangs on mobile devices.
+    const globalTimeoutId = setTimeout(() => {
+      console.warn("[SnipCaptions:proxy] Global safety timeout fired (25s limit). Aborting FFmpeg.");
+      globalAbortCtrl.abort();
+    }, 25_000);
+
     const loadAbortCtrl = new AbortController();
     const loadTimeoutId = setTimeout(() => {
       loadAbortCtrl.abort();
@@ -218,7 +235,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
 
       // Check if already aborted (before the heavy WASM fetch)
-      if (loadAbortCtrl.signal.aborted) throw new DOMException("WASM load timed out", "AbortError");
+      if (loadAbortCtrl.signal.aborted || globalAbortCtrl.signal.aborted) {
+        throw new DOMException("Proxy timed out/aborted", "AbortError");
+      }
 
       // Single-threaded FFmpeg core — no SharedArrayBuffer/COOP/COEP needed
       const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
@@ -229,28 +248,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       // WASM is loaded — cancel the load timeout, encode will now run freely
       clearTimeout(loadTimeoutId);
-      console.log("[SnipCaptions:proxy] FFmpeg loaded, writing input file…");
 
+      if (globalAbortCtrl.signal.aborted) {
+        throw new DOMException("Proxy timed out/aborted", "AbortError");
+      }
+
+      console.log("[SnipCaptions:proxy] FFmpeg loaded, writing input file…");
       await ffmpegInstance.writeFile("proxy_input.mp4", await fetchFile(file));
 
-      console.log("[SnipCaptions:proxy] Running transcode → 720p ultrafast with audio copy…");
-      // scale=-2:720 keeps aspect ratio at 720p, ensures width is divisible by 2.
-      // -map 0:v -map 0:a? maps video and optional audio.
-      // -c:a copy copies audio directly (fast, no re-encoding).
-      // -preset ultrafast + -crf 28 = fast encode.
-      // -movflags faststart = metadata at front for instant seek.
+      if (globalAbortCtrl.signal.aborted) {
+        throw new DOMException("Proxy timed out/aborted", "AbortError");
+      }
+
+      console.log(`[SnipCaptions:proxy] Running transcode → ${resName} ultrafast with audio copy…`);
       await ffmpegInstance.exec([
         "-i", "proxy_input.mp4",
         "-map", "0:v",
         "-map", "0:a?",
-        "-vf", "scale=-2:720",
+        "-vf", targetScale,
         "-c:v", "libx264",
         "-c:a", "copy",
         "-preset", "ultrafast",
         "-crf", "28",
         "-movflags", "faststart",
         "proxy_output.mp4",
-      ]);
+      ], -1, { signal: globalAbortCtrl.signal }); // wire global abort signal here to safely kill hanging execs on mobile OOM
+
+      if (globalAbortCtrl.signal.aborted) {
+        throw new DOMException("Proxy timed out/aborted", "AbortError");
+      }
 
       const data = await ffmpegInstance.readFile("proxy_output.mp4");
       if (!(data instanceof Uint8Array)) throw new Error("FFmpeg returned non-binary data");
@@ -264,6 +290,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ffmpegInstance.terminate();
       ffmpegInstance = null;
 
+      clearTimeout(globalTimeoutId);
+
       // Revoke old proxy if one existed
       if (proxyUrlRef.current) {
         URL.revokeObjectURL(proxyUrlRef.current);
@@ -273,10 +301,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       // Swap player URL to proxy — original URL stays in originalVideoUrl for export
       setVideoUrl(proxyUrl);
       setProxyStatus("ready");
-      console.log("[SnipCaptions:proxy] 480p proxy ready →", proxyUrl);
+      console.log(`[SnipCaptions:proxy] ${resName} proxy ready →`, proxyUrl);
 
     } catch (err) {
       clearTimeout(loadTimeoutId);
+      clearTimeout(globalTimeoutId);
 
       // Cleanup FFmpeg instance if still alive
       if (ffmpegInstance) {
@@ -286,10 +315,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
       const isAbort = err instanceof DOMException && err.name === "AbortError";
       const msg = isAbort
-        ? "Preview optimization couldn't load — playing original quality. Check your internet connection."
-        : "Preview optimization failed — playing original quality.";
+        ? "Preview optimization timed out or failed on your device — playing original video."
+        : "Preview optimization failed on your device — playing original video.";
 
-      console.warn("[SnipCaptions:proxy]", isAbort ? "WASM load timed out" : "Error", err);
+      console.warn("[SnipCaptions:proxy] Transcode failed or timed out:", err);
 
       // Fall back to original URL (already set as videoUrl — no change needed)
       setProxyStatus("failed");
