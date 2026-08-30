@@ -362,12 +362,14 @@ export function Studio() {
   const [activeTab, setActiveTab] = useState<"templates" | "settings" | "transcript">("templates");
   const [exportResolution, setExportResolution] = useState<"1080p" | "720p" | "540p">("1080p");
   const [showExportModal, setShowExportModal] = useState(false);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
 
   // Auto detect mobile device to default to 720p resolution
   useEffect(() => {
     if (typeof window !== "undefined") {
       const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
+      setIsMobileDevice(isMobile);
       if (isMobile) {
         setExportResolution("720p");
       }
@@ -838,7 +840,19 @@ export function Studio() {
       {/* Main Studio View (Remotion Player + Right Sidebar) */}
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
         {/* Left: Player Viewport */}
-        <div className="flex flex-1 flex-col overflow-hidden bg-black/60">
+        <div className="flex flex-1 flex-col overflow-hidden bg-black/60 relative">
+          {ready && isMobileDevice && (
+            <div className="flex justify-center pt-3 px-4 z-10 shrink-0">
+              <div className="flex items-center gap-2 rounded-full bg-[#FF453A]/8 px-3.5 py-1.5 text-[11px] font-semibold text-[#FF453A] shadow-lg shadow-[#FF453A]/5 backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-300">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+                <span>Don't worry, the final exported video will not lag!</span>
+              </div>
+            </div>
+          )}
           <div className="flex flex-1 items-center justify-center p-3 sm:p-5 min-h-0 min-w-0">
             {ready ? (
               <div
