@@ -65,13 +65,11 @@ Requirements:
 
 export async function validateApiKey(apiKey: string): Promise<boolean> {
   try {
-    console.log("[SnipCaptions:gemini] validateApiKey → calling Gemini");
     const ai = new GoogleGenAI({ apiKey });
     const res = await ai.models.generateContent({
       model: GEMINI_MODEL,
       contents: "Reply with exactly the single word: ok",
     });
-    console.log("[SnipCaptions:gemini] validateApiKey →", res.text);
     return Boolean(res.text && res.text.trim().toLowerCase().startsWith("ok"));
   } catch (e) {
     console.error("[SnipCaptions:gemini] validateApiKey error", e);
@@ -101,11 +99,9 @@ export async function transcribeVideo({
 
   onStatus?.("Uploading media…");
   onProgress?.({ progress: 0.05, words: 0 });
-  console.log("[SnipCaptions:gemini] uploading file:", file.name, file.type, file.size, "· model=", GEMINI_MODEL);
   onProgress?.({ progress: 0.10, words: 0 });
   const uploaded = await ai.files.upload({ file });
   onProgress?.({ progress: 0.25, words: 0 });
-  console.log("[SnipCaptions:gemini] uploaded →", uploaded.uri, uploaded.mimeType);
 
   try {
     const parts: Part[] = [
@@ -126,7 +122,6 @@ export async function transcribeVideo({
 
     onStatus?.("Processing audio…");
     onProgress?.({ progress: 0.35, words: 0 });
-    console.log("[SnipCaptions:gemini] starting stream · language=", language, "durationSeconds=", durationSeconds);
     let acc = "";
     let lastWordCount = 0;
     const startTime = Date.now();
@@ -142,7 +137,6 @@ export async function transcribeVideo({
       const words = (acc.match(/"word"\s*:/g) ?? []).length;
       if (words !== lastWordCount) {
         lastWordCount = words;
-        console.log("[SnipCaptions:gemini] stream progress · words=", words);
       }
       const elapsed = (Date.now() - startTime) / 1000;
       const estimatedDuration = durationSeconds ?? 30;
@@ -155,13 +149,11 @@ export async function transcribeVideo({
     }
 
     const clean = acc.replace(/```json|```/gi, "").trim();
-    console.log("[SnipCaptions:gemini] stream complete · raw length=", acc.length);
     const parsed = JSON.parse(clean || "{}") as {
       language?: string;
       text?: string;
       words?: Word[];
     };
-    console.log("[SnipCaptions:gemini] parsed · language=", parsed.language, "wordCount=", parsed.words?.length);
 
     if (!parsed.words || parsed.words.length === 0) {
       throw new Error(

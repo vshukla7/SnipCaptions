@@ -44,11 +44,7 @@ export function ExportResolutionModal({
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
           onClick={onClose}
         >
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0, y: 15 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.95, opacity: 0, y: 15 }}
-            transition={{ type: "spring", damping: 25, stiffness: 350 }}
+          <div
             className="w-full max-w-md rounded-3xl border border-white/[0.1] bg-[#1C1C1E] p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
@@ -85,7 +81,7 @@ export function ExportResolutionModal({
                       key={res}
                       type="button"
                       onClick={() => onChangeResolution(res)}
-                      className={`rounded-xl py-2.5 text-center text-[12px] font-bold transition-all ${
+                      className={`rounded-xl py-1.5 text-center text-[11px] font-bold transition-all ${
                         active
                           ? "bg-[#2997FF] text-white shadow-lg shadow-[#2997FF]/15"
                           : "text-white/60 hover:bg-white/[0.04] hover:text-white"
@@ -136,7 +132,7 @@ export function ExportResolutionModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 rounded-2xl border border-white/[0.1] bg-white/[0.02] hover:bg-white/[0.06] py-3 text-[14px] font-semibold text-white transition-colors"
+                className="flex-1 rounded-xl border border-white/[0.1] bg-white/[0.02] hover:bg-white/[0.06] py-2 text-[13px] font-semibold text-white transition-colors"
               >
                 Cancel
               </button>
@@ -149,12 +145,12 @@ export function ExportResolutionModal({
                     onProceed();
                   }, 100);
                 }}
-                className="flex-1 rounded-2xl bg-gradient-to-r from-[#2997FF] to-[#0066CC] py-3 text-[14px] font-semibold text-white shadow-lg shadow-[#2997FF]/25 hover:shadow-[#2997FF]/35 transition-all"
+                className="flex-1 rounded-xl bg-gradient-to-r from-[#2997FF] to-[#0066CC] py-2 text-[13px] font-semibold text-white shadow-lg shadow-[#2997FF]/25 hover:shadow-[#2997FF]/35 transition-all"
               >
                 Start Export
               </button>
             </div>
-          </motion.div>
+          </div>
         </motion.div>
       ) : null}
     </AnimatePresence>

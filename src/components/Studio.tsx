@@ -624,7 +624,7 @@ export function Studio() {
         container: "mp4",
         videoBitrate: "medium",
         audioBitrate: "medium",
-        hardwareAcceleration: "prefer-hardware",
+        hardwareAcceleration: "no-preference",
         muted: isMuted,
         delayRenderTimeoutInMilliseconds: 80000,
         signal: controller.signal,
