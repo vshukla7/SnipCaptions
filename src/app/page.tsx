@@ -23,6 +23,7 @@ export default function Home() {
     error,
     statusMessage,
     proxyStatus,
+    proxyProgress,
   } = useApp();
 
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
@@ -93,9 +94,9 @@ export default function Home() {
       <AdInterstitial
         open={status === "transcribing"}
         title={proxyStatus === "generating" && progress >= 0.95 ? "Processing your proxy video..." : "Generating captions..."}
-        progress={progress}
+        progress={proxyStatus === "generating" && progress >= 0.95 ? proxyProgress : progress}
         words={wordsSoFar}
-        hideProgressPercent={proxyStatus === "generating" && progress >= 0.95}
+        hideProgressPercent={false}
       />
 
       {/* Ad Interstitial Overlay during video export */}

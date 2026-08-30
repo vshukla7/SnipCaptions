@@ -35,6 +35,7 @@ interface AppContextValue {
   setVideo: (f: File | null) => void;
 
   proxyStatus: ProxyStatus;
+  proxyProgress: number;
   isHevc: boolean;
 
   /** Fire-and-forget toast from the proxy engine. Studio watches this to show a UI toast. */
@@ -103,6 +104,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [proxyStatus, setProxyStatus] = useState<ProxyStatus>("idle");
   const [needsProxy, setNeedsProxy] = useState(false);
   const [isHevc, setIsHevc] = useState(false);
+  const [proxyProgress, setProxyProgress] = useState(0);
   const [proxyToast, setProxyToast] = useState<{ type: "warning" | "error"; message: string } | null>(null);
 
   const [language, setLanguageState] = useState("auto");
@@ -211,6 +213,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       });
 
+      ffmpegInstance.on("progress", ({ progress }) => {
+        setProxyProgress(progress);
+      });
+
       // Check if already aborted (before the heavy WASM fetch)
       if (loadAbortCtrl.signal.aborted) throw new DOMException("WASM load timed out", "AbortError");
 
@@ -310,6 +316,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setProxyStatus("idle");
       setNeedsProxy(false);
       setIsHevc(false);
+      setProxyProgress(0);
       setProxyToast(null);
       setTranscription(null);
       setDurationInSeconds(0);
@@ -326,6 +333,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setProxyStatus("idle");
     setNeedsProxy(false);
     setIsHevc(false);
+    setProxyProgress(0);
     setTranscription(null);
     setStatus("idle");
     setError(null);
@@ -498,6 +506,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     originalVideoUrl,
     setVideo,
     proxyStatus,
+    proxyProgress,
     isHevc,
     proxyToast,
     clearProxyToast,
