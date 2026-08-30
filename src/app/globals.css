@@ -160,6 +160,10 @@ body {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+@keyframes indeterminate-loading {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
 
 .anim-fade-in {
   animation: fade-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
@@ -172,6 +176,9 @@ body {
 }
 .anim-pulse-soft {
   animation: pulse-soft 2s ease-in-out infinite;
+}
+.anim-indeterminate {
+  animation: indeterminate-loading 1.6s infinite cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Force hardware GPU acceleration on video elements for smooth mobile playback */

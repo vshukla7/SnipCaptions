@@ -86,11 +86,17 @@ export function AdInterstitial({
             </span>
           </div>
 
-          <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.08]">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-[#2997FF] to-[#0066CC] transition-all duration-300"
-              style={{ width: `${pct}%` }}
-            />
+          <div className="h-2 w-full overflow-hidden rounded-full bg-white/[0.08] relative">
+            {hideProgressPercent ? (
+              <div
+                className="absolute inset-y-0 left-0 w-1/2 rounded-full bg-gradient-to-r from-[#2997FF] to-[#0066CC] anim-indeterminate"
+              />
+            ) : (
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[#2997FF] to-[#0066CC] transition-all duration-300"
+                style={{ width: `${pct}%` }}
+              />
+            )}
           </div>
         </div>
       </div>
