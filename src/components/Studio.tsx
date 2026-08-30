@@ -329,6 +329,7 @@ const DUMMY_WORDS = [
 
 export function Studio() {
   const {
+    videoFile,
     videoUrl,
     words: storeWords,
     captionTheme,
@@ -358,6 +359,26 @@ export function Studio() {
   const [exporting, setExporting] = useState(false);
   const [naturalAspect, setNaturalAspect] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"templates" | "settings" | "transcript">("templates");
+  const [exportResolution, setExportResolution] = useState<"1080p" | "720p" | "540p">("1080p");
+  const [toast, setToast] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
+
+  // Auto detect mobile device to default to 720p resolution
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
+      if (isMobile) {
+        setExportResolution("720p");
+      }
+    }
+  }, []);
+
+  // Auto clear toast notifications
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 6000);
+    return () => clearTimeout(timer);
+  }, [toast]);
+
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<PlayerRef>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -449,14 +470,48 @@ export function Studio() {
   const durationInFrames = Math.max(1, Math.round(durationInSeconds * FPS));
   const ready = Boolean(videoUrl) || words.length > 0;
 
-  // Render dimensions must be multiples of 2 (even numbers) for H.264 WebCodecs
+  // Maximum source base resolution dimensions (1080p base)
   const compWidth = naturalAspect && naturalAspect > 1 ? 1920 : 1080;
   const compHeight = naturalAspect && naturalAspect > 1 ? Math.round(Math.round(1920 / naturalAspect) / 2) * 2 : 1920;
 
-  // Auto detect natural aspect ratio when video URL is present
+  // Render/Export dimensions must be multiples of 2 (even numbers) for H.264 WebCodecs
+  const getRenderDimensions = () => {
+    let baseWidth = 1080;
+    if (exportResolution === "720p") baseWidth = 720;
+    else if (exportResolution === "540p") baseWidth = 540;
+
+    let baseHeight = 1920;
+    if (exportResolution === "720p") baseHeight = 1280;
+    else if (exportResolution === "540p") baseHeight = 960;
+
+    if (naturalAspect && naturalAspect > 1) {
+      const w = exportResolution === "1080p" ? 1920 : exportResolution === "720p" ? 1280 : 960;
+      const h = Math.round(Math.round(w / naturalAspect) / 2) * 2;
+      return { width: w, height: h };
+    } else {
+      const w = baseWidth;
+      const h = naturalAspect ? Math.round(Math.round(w / naturalAspect) / 2) * 2 : baseHeight;
+      return { width: w, height: h };
+    }
+  };
+
+  const { width: renderWidth, height: renderHeight } = getRenderDimensions();
+
+  // Dynamic preview resolution scaling for Player to prevent lagging on mobile/desktop
+  // Keep max preview dimension to 640px to ensure fluid playback and zero frame-drop issues
+  const maxPreviewDimension = 640;
+  const currentMax = Math.max(compWidth, compHeight);
+  const previewScale = currentMax > maxPreviewDimension ? maxPreviewDimension / currentMax : 1.0;
+  const previewWidth = Math.round((compWidth * previewScale) / 2) * 2;
+  const previewHeight = Math.round((compHeight * previewScale) / 2) * 2;
+
+  // Auto detect natural aspect ratio when video URL is present with iOS compatibility
   useEffect(() => {
     if (!videoUrl) return;
     const v = document.createElement("video");
+    v.preload = "metadata";
+    v.playsInline = true;
+    v.muted = true;
     v.src = videoUrl;
     v.onloadedmetadata = () => {
       if (v.videoWidth && v.videoHeight) {
@@ -494,14 +549,58 @@ export function Studio() {
     setExporting(true);
     setStatus("exporting");
     setProgress(0);
-    setStatusMessage("Rendering high-quality video…");
+    setStatusMessage("Rendering video…");
     try {
-      const { renderMediaOnWeb } = await import("@remotion/web-renderer");
+      const { renderMediaOnWeb, canRenderMediaOnWeb } = await import("@remotion/web-renderer");
       const controller = new AbortController();
 
-      const aspectW = compWidth;
-      const aspectH = compHeight;
+      const aspectW = renderWidth;
+      const aspectH = renderHeight;
 
+      // 1. Verify browser compatibility and determine audio requirements
+      let isMuted = false;
+      const renderCheck = await canRenderMediaOnWeb({
+        container: "mp4",
+        videoCodec: "h264",
+        width: aspectW,
+        height: aspectH,
+        muted: false,
+      });
+
+      if (!renderCheck.canRender) {
+        console.warn("[Studio] canRenderMediaOnWeb failed with default settings:", renderCheck.issues);
+
+        // Check if the issue is audio encoder related (or if AudioEncoder is undefined in the environment)
+        const hasAudioIssue = renderCheck.issues.some(
+          (issue) =>
+            issue.type === "audio-codec-unsupported" ||
+            issue.message.toLowerCase().includes("audio")
+        ) || (typeof window !== "undefined" && !("AudioEncoder" in window));
+
+        if (hasAudioIssue) {
+          console.log("[Studio] Browser lacks AudioEncoder. Attempting muted render check...");
+          const mutedCheck = await canRenderMediaOnWeb({
+            container: "mp4",
+            videoCodec: "h264",
+            width: aspectW,
+            height: aspectH,
+            muted: true,
+          });
+
+          if (mutedCheck.canRender) {
+            isMuted = true;
+            console.log("[Studio] Muted render check succeeded. Video will be exported without audio.");
+          } else {
+            const errorMsg = mutedCheck.issues.map((i) => i.message).join(", ") || "Video rendering not supported.";
+            throw new Error(errorMsg);
+          }
+        } else {
+          const errorMsg = renderCheck.issues.map((i) => i.message).join(", ") || "Your browser doesn't support client-side video rendering.";
+          throw new Error(errorMsg);
+        }
+      }
+
+      // 2. Execute renderMediaOnWeb
       const { getBlob } = await renderMediaOnWeb({
         composition: {
           id: "snipcaptions",
@@ -524,6 +623,7 @@ export function Studio() {
         videoBitrate: "medium",
         audioBitrate: "medium",
         hardwareAcceleration: "prefer-hardware",
+        muted: isMuted,
         signal: controller.signal,
         onProgress: (p: unknown) => {
           const value = typeof p === "number" ? p : (p as { progress?: number })?.progress ?? 0;
@@ -532,10 +632,66 @@ export function Studio() {
       });
 
       const blob = await getBlob();
-      const url = URL.createObjectURL(blob);
+
+      // 3. Merging Audio on Safari/iOS using FFmpeg.wasm (if video is muted and original videoFile is present)
+      let finalBlob = blob;
+      let audioMuxSuccess = false;
+      
+      if (isMuted && videoFile) {
+        console.log("[Studio] Muted export completed. Initiating FFmpeg audio muxing...");
+        setStatusMessage("Muxing audio track with FFmpeg…");
+        setProgress(0);
+        try {
+          const { FFmpeg } = await import("@ffmpeg/ffmpeg");
+          const { fetchFile, toBlobURL } = await import("@ffmpeg/util");
+
+          const ffmpeg = new FFmpeg();
+          
+          // Log messages from FFmpeg core
+          ffmpeg.on("log", ({ message }) => {
+            console.log("[FFmpeg]", message);
+          });
+
+          // Single-threaded core files from standard CDN (bypass SharedArrayBuffer/COOP/COEP isolation constraints)
+          const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+          await ffmpeg.load({
+            coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+            wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+          });
+
+          // Write files in-memory
+          await ffmpeg.writeFile("muted.mp4", await fetchFile(blob));
+          await ffmpeg.writeFile("original.mp4", await fetchFile(videoFile));
+
+          // Run stream copy muxing (very fast since no decoding/encoding is done)
+          await ffmpeg.exec([
+            "-i", "muted.mp4",
+            "-i", "original.mp4",
+            "-map", "0:v",
+            "-map", "1:a",
+            "-c", "copy",
+            "output.mp4"
+          ]);
+
+          const data = await ffmpeg.readFile("output.mp4");
+          if (data instanceof Uint8Array) {
+            finalBlob = new Blob([data as any], { type: "video/mp4" });
+            console.log("[Studio] FFmpeg audio muxing successful!");
+            audioMuxSuccess = true;
+          } else {
+            throw new Error("FFmpeg returned string data instead of binary array.");
+          }
+        } catch (ffmpegErr) {
+          console.error("[Studio] FFmpeg audio muxing failed, falling back to muted video", ffmpegErr);
+          // Let it fall back to muted video download
+        }
+      }
+
+      const url = URL.createObjectURL(finalBlob);
       const a = document.createElement("a");
       a.href = url;
       a.download = `snipcaptions-${captionTheme}-${Date.now()}.mp4`;
+      a.target = "_self"; // Fix safe download trigger context on iOS Safari
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -543,9 +699,32 @@ export function Studio() {
 
       setProgress(1);
       setStatusMessage("Export complete!");
+
+      if (isMuted) {
+        if (audioMuxSuccess) {
+          setToast({
+            type: "success",
+            message: "Video exported successfully with audio restored via FFmpeg!",
+          });
+        } else {
+          setToast({
+            type: "warning",
+            message: "Video exported without audio due to iOS Safari limits. For sound, use a desktop browser.",
+          });
+        }
+      } else {
+        setToast({
+          type: "success",
+          message: "Video exported successfully with frame-accurate captions!",
+        });
+      }
     } catch (e) {
       console.error("[Studio] export error", e);
       setStatusMessage(e instanceof Error ? e.message : "Export failed");
+      setToast({
+        type: "error",
+        message: e instanceof Error ? e.message : "An unexpected error occurred during export.",
+      });
     } finally {
       setExporting(false);
       setStatus("ready");
@@ -672,8 +851,8 @@ export function Studio() {
                   inputProps={playerInputProps}
                   durationInFrames={durationInFrames}
                   fps={FPS}
-                  compositionWidth={compWidth}
-                  compositionHeight={compHeight}
+                  compositionWidth={previewWidth}
+                  compositionHeight={previewHeight}
                   controls
                   loop
                   style={{
@@ -1008,6 +1187,40 @@ export function Studio() {
                       Align Bottom
                     </button>
                   </div>
+
+                  {/* Export Resolution Selector */}
+                  <div className="space-y-2 border-t border-white/[0.04] pt-4">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold uppercase tracking-wider text-white/40">
+                        Export Resolution
+                      </label>
+                      <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] font-mono text-white/40">
+                        {exportResolution === "1080p" ? "Full HD" : exportResolution === "720p" ? "HD" : "Standard"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1 rounded-xl bg-white/[0.04] p-1 border border-white/[0.08]">
+                      {(["1080p", "720p", "540p"] as const).map((res) => {
+                        const active = exportResolution === res;
+                        return (
+                          <button
+                            key={res}
+                            type="button"
+                            onClick={() => setExportResolution(res)}
+                            className={`rounded-lg py-1.5 text-center text-[12px] font-semibold transition-all ${
+                              active
+                                ? "bg-[#2997FF] text-white shadow"
+                                : "text-white/60 hover:bg-white/[0.04] hover:text-white"
+                            }`}
+                          >
+                            {res}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-white/30 leading-normal">
+                      Lower resolutions (720p/540p) export significantly faster and are recommended for mobile devices to prevent memory crashes.
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -1046,6 +1259,43 @@ export function Studio() {
           </div>
         </div>
       </div>
+
+      {/* Premium Toast Notification System */}
+      {toast && (
+        <div className="absolute top-16 right-5 z-50 flex max-w-sm items-center gap-3 rounded-2xl border border-white/10 bg-[#1c1c1e]/90 p-4 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.06]">
+            {toast.type === "error" ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FF453A" strokeWidth="2.5">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            ) : toast.type === "warning" ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#FFD60A" strokeWidth="2.5">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#30D158" strokeWidth="2.5">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-[13px] font-semibold text-white">
+              {toast.type === "error" ? "Export Failed" : toast.type === "warning" ? "Notice" : "Export Success"}
+            </h4>
+            <p className="text-[11px] text-white/60 mt-0.5 leading-normal">{toast.message}</p>
+          </div>
+          <button onClick={() => setToast(null)} className="text-white/30 hover:text-white transition-colors">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
