@@ -1,13 +1,5 @@
 /**
  * Kinetic01Template — adapted from remotion-captions-themes/Kinetic01
- *
- * Concept:
- * - Active line's words are chunked into groups of 3-4
- * - Each group has one "main word" (longest, bold, big)
- * - Side words float around it in Dancing Script cursive
- * - Main word gets slide-up / blur-in animation per line
- * - Side words get alternating slide+scale / instant reveal
- * - Active spoken word changes color to accentColor
  */
 
 import React from "react";
@@ -38,7 +30,6 @@ function seededRandom(seed: number): number {
 
 /** Approximate char-width for a word in pixels at given fontSize */
 function estimateWidth(text: string, fontSize: number, isBold: boolean): number {
-  // Bold compact font ≈ 0.6em, cursive light ≈ 0.5em per char
   const perChar = isBold ? fontSize * 0.6 : fontSize * 0.5;
   return text.length * perChar;
 }
@@ -101,7 +92,7 @@ function resolveOverlaps(
 
 // ─── main component ──────────────────────────────────────────────────────────
 
-export const Kinetic01Template: React.FC<TemplateProps> = ({
+export const Kinetic01Template: React.FC<TemplateProps> = React.memo(({
   activeLine,
   time,
   frame,
@@ -112,6 +103,7 @@ export const Kinetic01Template: React.FC<TemplateProps> = ({
   customFontFamily,
   activeWordIdx,
   words: allWords,
+  isPlaying,
 }) => {
   if (!activeLine) return null;
 
@@ -182,12 +174,11 @@ export const Kinetic01Template: React.FC<TemplateProps> = ({
       });
     }
 
-    const GAP = -4 * scaleFactor; // Negative gap = side words slightly overlap hero edges, very tight
+    const GAP = -4 * scaleFactor;
 
     interface Box { left: number; top: number; width: number; height: number; anchor?: Anchor }
     const boxes: Box[] = [];
 
-    // Insert main box at index mainIdx
     group.forEach((w, i) => {
       if (i === mainIdx) { boxes.push(mainBox); return; }
       const sIdx = sideIndices.indexOf(i);
@@ -209,7 +200,6 @@ export const Kinetic01Template: React.FC<TemplateProps> = ({
       boxes.push({ left, top, width: sw, height: sh, anchor });
     });
 
-    // Resolve horizontal overlaps per layer
     const topLayer    = boxes.map((b, i) => ({ ...b, idx: i })).filter(b => b.top < -mainH / 3);
     const bottomLayer = boxes.map((b, i) => ({ ...b, idx: i })).filter(b => b.top >= -mainH / 3);
     resolveOverlaps(topLayer);
@@ -219,11 +209,8 @@ export const Kinetic01Template: React.FC<TemplateProps> = ({
     return boxes;
   }, [group, mainIdx, mainSize, sideSize, scaleFactor, activeLine.start]);
 
-  // ── 5. animation type for this line ───────────────────────────────────────
-  // 0 = none, 1 = slide-up, 2 = blur-in
   const animType = group.length === 1 ? 1 : (Math.round(activeLine.start * 10) % 3);
 
-  // ── 6. render ──────────────────────────────────────────────────────────────
   return (
     <div
       style={{
@@ -235,7 +222,6 @@ export const Kinetic01Template: React.FC<TemplateProps> = ({
         alignItems: "center",
       }}
     >
-      {/* origin div so all absolute boxes are relative to center */}
       <div style={{ position: "relative", width: 0, height: 0 }}>
         {group.map((word, idx) => {
           const box = layout[idx];
@@ -245,12 +231,10 @@ export const Kinetic01Template: React.FC<TemplateProps> = ({
           const wordStartFrame = Math.round(word.start * fps);
           const relFrame = frame - wordStartFrame;
 
-          // Word not yet spoken — hide
           if (relFrame < 0) return null;
 
           const isCurrent = time >= word.start && time < word.end;
 
-          // ── animation values ──
           let opacity = 1;
           let transform = "none";
           let filter = "none";
@@ -262,8 +246,10 @@ export const Kinetic01Template: React.FC<TemplateProps> = ({
               transform = `translateY(${ty}px)`;
             } else if (animType === 2) {
               opacity = interpolate(relFrame, [0, 8], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-              const blur = interpolate(relFrame, [0, 8], [12, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-              filter = `blur(${blur}px)`;
+              if (!isPlaying) {
+                const blur = interpolate(relFrame, [0, 8], [12, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+                filter = `blur(${blur}px)`;
+              }
             }
           } else {
             const animated = (idx + Math.round(activeLine.start)) % 2 === 0;
@@ -281,7 +267,9 @@ export const Kinetic01Template: React.FC<TemplateProps> = ({
           const size   = isMain ? mainSize : sideSize;
           const weight = isMain ? 900 : 700;
           const color  = isCurrent ? (accentColor || "#FFD60A") : "#ffffff";
-          const shadow = isMain
+          const shadow = isPlaying
+            ? "none"
+            : isMain
             ? `0 ${8 * scaleFactor}px ${18 * scaleFactor}px rgba(0,0,0,0.65)`
             : `0 ${4 * scaleFactor}px ${10 * scaleFactor}px rgba(0,0,0,0.5)`;
 
@@ -308,7 +296,7 @@ export const Kinetic01Template: React.FC<TemplateProps> = ({
                 textShadow: shadow,
                 whiteSpace: "nowrap",
                 transition: "color 0.1s ease",
-                willChange: "transform, opacity, filter",
+                willChange: "transform, opacity",
               }}
             >
               {word.word}
@@ -318,4 +306,5 @@ export const Kinetic01Template: React.FC<TemplateProps> = ({
       </div>
     </div>
   );
-};
+});
+Kinetic01Template.displayName = "Kinetic01Template";

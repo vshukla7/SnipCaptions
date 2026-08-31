@@ -3,6 +3,7 @@ import {
   AbsoluteFill,
   useCurrentFrame,
   useVideoConfig,
+  Internals,
 } from "remotion";
 import { Video } from "@remotion/media";
 import type { CaptionPosition, CaptionThemeId, Word } from "@/lib/types";
@@ -22,7 +23,7 @@ import { DualLineGlowTemplate } from "./templates/DualLineGlowTemplate";
 import { PWEditsTemplate } from "./templates/PWEditsTemplate";
 import { MrBeastTemplate } from "./templates/MrBeastTemplate";
 import { MinimalBlendTemplate } from "./templates/MinimalBlendTemplate";
-import { PremiereGlowTemplate } from "./templates/PremiereGlowTemplate"; // Force reload
+import { PremiereGlowTemplate } from "./templates/PremiereGlowTemplate";
 
 export interface CaptionCompositionProps {
   src: string;
@@ -64,6 +65,7 @@ function buildLines(words: Word[], maxWordsPerLine: number): Line[] {
   flush();
   return lines;
 }
+
 const FONT_FOR_THEME: Record<CaptionThemeId, string> = {
   clean: '"SF Pro Display", "Inter", sans-serif',
   neon: '"Gilroy", "Outfit", sans-serif',
@@ -82,20 +84,96 @@ const FONT_FOR_THEME: Record<CaptionThemeId, string> = {
   premiere_glow: '"Neue Haas Grotesk Display Pro", "Helvetica Neue", "Syne", sans-serif',
 };
 
-export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
-  src,
-  words,
-  theme,
-  accentColor,
-  maxWordsPerLine = 3,
-  position = { x: 50, y: 80 },
-  scale = 1.0,
-  customFontFamily,
-  mutedVideo = false,
-}) => {
+// ─── Memoized Hardware-Accelerated Video Component ─────────────────────────────
+const MemoizedVideo = React.memo<{ src: string; muted: boolean }>(({ src, muted }) => {
+  if (!src || !src.trim()) {
+    return (
+      <AbsoluteFill
+        style={{
+          background: "radial-gradient(ellipse at 50% 80%, #1a1a2e 0%, #0d0d12 60%, #000000 100%)",
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "center",
+          paddingBottom: "8%",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px)",
+            pointerEvents: "none",
+          }}
+        />
+      </AbsoluteFill>
+    );
+  }
+
+  return (
+    <Video
+      src={src}
+      style={{
+        width: "100%",
+        height: "100%",
+        objectFit: "contain",
+        transform: "translate3d(0, 0, 0)",
+        willChange: "transform",
+        imageRendering: "pixelated",
+      }}
+      muted={muted}
+    />
+  );
+});
+MemoizedVideo.displayName = "MemoizedVideo";
+
+// ─── Memoized Subtitle Canvas Wrapper ──────────────────────────────────────────
+const MemoizedCanvasWrapper = React.memo<{
+  position: CaptionPosition;
+  scale: number;
+  children: React.ReactNode;
+}>(({ position, scale, children }) => {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: `${position.x}%`,
+        top: `${position.y}%`,
+        transform: `translate(-50%, -50%) scale(${scale})`,
+        width: "90%",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        pointerEvents: "none",
+      }}
+    >
+      {children}
+    </div>
+  );
+});
+MemoizedCanvasWrapper.displayName = "MemoizedCanvasWrapper";
+
+// ─── Leaf Caption Overlay Component (Isolates Frame Updates) ───────────────────
+const ActiveCaptionOverlay = React.memo<{
+  words: Word[];
+  theme: CaptionThemeId;
+  accentColor: string;
+  maxWordsPerLine: number;
+  customFontFamily?: string | null;
+  position: CaptionPosition;
+  scale: number;
+}>(({ words, theme, accentColor, maxWordsPerLine, customFontFamily, position, scale }) => {
   const frame = useCurrentFrame();
   const { fps, width } = useVideoConfig();
   const time = frame / fps;
+
+  let isPlaying = false;
+  try {
+    const [playing, , imperativePlaying] = Internals.Timeline.usePlayingState();
+    isPlaying = Boolean(playing || (imperativePlaying && imperativePlaying.current));
+  } catch {
+    isPlaying = false;
+  }
 
   const lines = useMemo(
     () => buildLines(words, maxWordsPerLine),
@@ -107,16 +185,13 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
   );
   const activeLine = activeIndex >= 0 ? lines[activeIndex] : lines[lines.length - 1];
 
-  // Calculate active word index and neighboring words for dynamic context stack
   const activeWordIdx = useMemo(() => {
-    // 1. Check if there's an exact match
     for (let i = 0; i < words.length; i++) {
       const w = words[i];
       if (time >= w.start && time < w.end) {
         return i;
       }
     }
-    // 2. If not, find the last word that has ended before the current time
     let lastIdx = 0;
     for (let i = 0; i < words.length; i++) {
       if (time >= words[i].end) {
@@ -144,8 +219,6 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
     return items.join(" ");
   }, [words, activeWordIdx]);
 
-
-
   const baseFont = customFontFamily || FONT_FOR_THEME[theme];
   const fontSize = Math.round(width * 0.062);
 
@@ -164,134 +237,82 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
     prevWordsStr,
     nextWordsStr,
     customFontFamily,
+    isPlaying,
   };
+
+  if (theme === "yellow_script") {
+    return (
+      <YellowScriptCaption
+        words={words}
+        activeLine={activeLine}
+        time={time}
+        frame={frame}
+        fps={fps}
+        width={width}
+        height={0}
+        scale={scale}
+        config={{
+          placementY: position.y,
+          topLineFont: '"Celosia Nature", "Caveat", "Kalam", cursive',
+          topLineColor: accentColor || "#FFDC00",
+          bottomLineFont: '"Gilroy", "SF Pro Display", sans-serif',
+          bottomLineColor: "#FFFFFF",
+          highlightColor: "#FF1E1E",
+          spring: { mass: 0.5, damping: 12, stiffness: 200 },
+        }}
+      />
+    );
+  }
 
   let captionContent: React.ReactNode = null;
 
-  if (theme === "clean") {
-    captionContent = <CleanTemplate {...templateProps} />;
-  } else if (theme === "neon") {
-    captionContent = <NeonTemplate {...templateProps} />;
-  } else if (theme === "kinetic") {
-    captionContent = <KineticTemplate {...templateProps} />;
-  } else if (theme === "highlight") {
-    captionContent = <HighlightTemplate {...templateProps} />;
-  } else if (theme === "snipcap_special") {
-    captionContent = <SnipcapSpecialTemplate {...templateProps} />;
-  } else if (theme === "black_punch") {
-    captionContent = <BlackPunchTemplate {...templateProps} />;
-  } else if (theme === "liquid_glass") {
-    captionContent = <LiquidGlassTemplate {...templateProps} />;
-  } else if (theme === "one_word") {
-    captionContent = <OneWordTemplate {...templateProps} />;
-  } else if (theme === "yellow_script") {
-    // YellowScriptCaption handles its own absolute positioning internally
-    return (
-      <AbsoluteFill style={{ backgroundColor: "#000000" }}>
-        {Boolean(src && src.trim()) ? (
-          <Video
-            src={src}
-            style={{
-              width: "100%",
-              height: "100%",
-              objectFit: "contain",
-              transform: "translateZ(0)",
-              willChange: "transform",
-            }}
-            muted={mutedVideo}
-          />
-        ) : (
-          <AbsoluteFill style={{ backgroundColor: "#121214", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ color: "rgba(255,255,255,0.3)", fontFamily: "sans-serif", fontSize: 24, textAlign: "center" }}>
-              Studio Demo Preview Mode
-            </div>
-          </AbsoluteFill>
-        )}
-        <YellowScriptCaption
-          words={words}
-          activeLine={activeLine}
-          time={time}
-          frame={frame}
-          fps={fps}
-          width={width}
-          height={0}
-          scale={scale}
-          config={{
-            placementY: position.y,
-            topLineFont: '"Celosia Nature", "Caveat", "Kalam", cursive',
-            topLineColor: accentColor || "#FFDC00",
-            bottomLineFont: '"Gilroy", "SF Pro Display", sans-serif',
-            bottomLineColor: "#FFFFFF",
-            highlightColor: "#FF1E1E",
-            spring: { mass: 0.5, damping: 12, stiffness: 200 },
-          }}
-        />
-      </AbsoluteFill>
-    );
-  } else if (theme === "kinetic_01") {
-    captionContent = <Kinetic01Template {...templateProps} />;
-  } else if (theme === "dual_line_glow") {
-    captionContent = <DualLineGlowTemplate {...templateProps} />;
-  } else if (theme === "pw_edits") {
-    captionContent = <PWEditsTemplate {...templateProps} />;
-  } else if (theme === "mr_beast") {
-    captionContent = <MrBeastTemplate {...templateProps} />;
-  } else if (theme === "minimal_blend") {
-    captionContent = <MinimalBlendTemplate {...templateProps} />;
-  } else if (theme === "premiere_glow") {
-    captionContent = <PremiereGlowTemplate {...templateProps} />;
-  }
+  if (theme === "clean") captionContent = <CleanTemplate {...templateProps} />;
+  else if (theme === "neon") captionContent = <NeonTemplate {...templateProps} />;
+  else if (theme === "kinetic") captionContent = <KineticTemplate {...templateProps} />;
+  else if (theme === "highlight") captionContent = <HighlightTemplate {...templateProps} />;
+  else if (theme === "snipcap_special") captionContent = <SnipcapSpecialTemplate {...templateProps} />;
+  else if (theme === "black_punch") captionContent = <BlackPunchTemplate {...templateProps} />;
+  else if (theme === "liquid_glass") captionContent = <LiquidGlassTemplate {...templateProps} />;
+  else if (theme === "one_word") captionContent = <OneWordTemplate {...templateProps} />;
+  else if (theme === "kinetic_01") captionContent = <Kinetic01Template {...templateProps} />;
+  else if (theme === "dual_line_glow") captionContent = <DualLineGlowTemplate {...templateProps} />;
+  else if (theme === "pw_edits") captionContent = <PWEditsTemplate {...templateProps} />;
+  else if (theme === "mr_beast") captionContent = <MrBeastTemplate {...templateProps} />;
+  else if (theme === "minimal_blend") captionContent = <MinimalBlendTemplate {...templateProps} />;
+  else if (theme === "premiere_glow") captionContent = <PremiereGlowTemplate {...templateProps} />;
 
   return (
+    <MemoizedCanvasWrapper position={position} scale={scale}>
+      {captionContent}
+    </MemoizedCanvasWrapper>
+  );
+});
+ActiveCaptionOverlay.displayName = "ActiveCaptionOverlay";
+
+// ─── Top-Level Composition Component (Isolated from frame ticks) ──────────────
+export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
+  src,
+  words,
+  theme,
+  accentColor,
+  maxWordsPerLine = 3,
+  position = { x: 50, y: 80 },
+  scale = 1.0,
+  customFontFamily,
+  mutedVideo = false,
+}) => {
+  return (
     <AbsoluteFill style={{ backgroundColor: "#000000" }}>
-      {Boolean(src && src.trim()) ? (
-        <Video
-          src={src}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "contain",
-            transform: "translateZ(0)",
-            willChange: "transform",
-          }}
-          muted={mutedVideo}
-        />
-      ) : (
-        <AbsoluteFill
-          style={{
-            background: "radial-gradient(ellipse at 50% 80%, #1a1a2e 0%, #0d0d12 60%, #000000 100%)",
-            display: "flex",
-            alignItems: "flex-end",
-            justifyContent: "center",
-            paddingBottom: "8%",
-          }}
-        >
-          {/* Subtle noise texture via repeating gradient */}
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              background: "repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px)",
-              pointerEvents: "none",
-            }}
-          />
-        </AbsoluteFill>
-      )}
-      <div
-        style={{
-          position: "absolute",
-          left: `${position.x}%`,
-          top: `${position.y}%`,
-          transform: `translate(-50%, -50%) scale(${scale})`,
-          width: "90%",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          pointerEvents: "none",
-        }}
-      >
-        {captionContent}
-      </div>
+      <MemoizedVideo src={src} muted={mutedVideo} />
+      <ActiveCaptionOverlay
+        words={words}
+        theme={theme}
+        accentColor={accentColor}
+        maxWordsPerLine={maxWordsPerLine}
+        customFontFamily={customFontFamily}
+        position={position}
+        scale={scale}
+      />
     </AbsoluteFill>
   );
 };

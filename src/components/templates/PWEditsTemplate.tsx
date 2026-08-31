@@ -1,12 +1,5 @@
 /**
  * PWEditsTemplate — PW Edits Style
- *
- * Two-row caption layout inspired by high-energy short-form content:
- *   TOP    → First half of line words — Montserrat Bold, white, spring slide-up
- *   BOTTOM → Second half — Impact/Bebas Neue, crimson gradient, red aura glow, spring slide-up
- *
- * Group container applies a continuous slow-zoom (scale 1.0 → 1.08) over the
- * active line duration to simulate a camera push-in effect.
  */
 
 import React from "react";
@@ -47,12 +40,10 @@ function adjustColorBrightness(hex: string, percent: number): string {
     let b = parseInt(c.substring(4, 6), 16);
 
     if (percent < 0) {
-      // Darken
       r = Math.max(0, Math.floor(r * (1 + percent)));
       g = Math.max(0, Math.floor(g * (1 + percent)));
       b = Math.max(0, Math.floor(b * (1 + percent)));
     } else {
-      // Lighten
       r = Math.min(255, Math.floor(r + (255 - r) * percent));
       g = Math.min(255, Math.floor(g + (255 - g) * percent));
       b = Math.min(255, Math.floor(b + (255 - b) * percent));
@@ -66,7 +57,7 @@ function adjustColorBrightness(hex: string, percent: number): string {
   return hex;
 }
 
-export const PWEditsTemplate: React.FC<TemplateProps> = ({
+export const PWEditsTemplate: React.FC<TemplateProps> = React.memo(({
   activeLine,
   frame,
   fps,
@@ -74,17 +65,16 @@ export const PWEditsTemplate: React.FC<TemplateProps> = ({
   fontSize,
   accentColor,
   customFontFamily,
+  isPlaying,
 }) => {
   if (!activeLine || !activeLine.words.length) return null;
 
   const words = activeLine.words;
 
-  // Split words into top / bottom halves (same logic as DualLineGlow)
   const splitAt    = words.length === 1 ? 1 : Math.ceil(words.length / 2);
   const topWords    = words.slice(0, splitAt);
   const bottomWords = words.slice(splitAt);
 
-  // ── Group scale: camera push-in over the active line duration ──────────────
   const lineStartFrame = Math.round(activeLine.start * fps);
   const lineEndFrame   = Math.round(activeLine.end   * fps);
   const totalDuration  = Math.max(1, lineEndFrame - lineStartFrame);
@@ -97,19 +87,15 @@ export const PWEditsTemplate: React.FC<TemplateProps> = ({
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
   );
 
-  // ── Color processing ────────────────────────────────────────────────────────
   const activeAccent = accentColor || "#FF1E2A";
   const lightAccent = adjustColorBrightness(activeAccent, 0.15);
-  const darkAccent = adjustColorBrightness(activeAccent, -0.35);
   const glowAccent = hexToRgba(activeAccent, 0.9);
 
-  // ── Font processing ─────────────────────────────────────────────────────────
   const topFont = customFontFamily || TOP_FONT;
   const bottomFont = customFontFamily || BOTTOM_FONT;
 
-  // ── Font sizes ──────────────────────────────────────────────────────────────
-  const topSize    = Math.round(fontSize * 1.05);   // ~44–46 px at typical width
-  const bottomSize = Math.round(fontSize * 1.75);   // ~72–78 px
+  const topSize    = Math.round(fontSize * 1.05);
+  const bottomSize = Math.round(fontSize * 1.75);
 
   return (
     <div
@@ -124,7 +110,7 @@ export const PWEditsTemplate: React.FC<TemplateProps> = ({
         willChange: "transform",
       }}
     >
-      {/* ── TOP LINE — Montserrat Bold / custom font, white, spring slide-up ─────────────── */}
+      {/* ── TOP LINE — Montserrat Bold / custom font, white ── */}
       <div
         style={{
           display: "flex",
@@ -136,7 +122,7 @@ export const PWEditsTemplate: React.FC<TemplateProps> = ({
           fontWeight: 700,
           fontSize: topSize,
           color: "#FFFFFF",
-          textShadow: "0px 3px 6px rgba(0,0,0,0.9)",
+          textShadow: isPlaying ? "none" : "0px 3px 6px rgba(0,0,0,0.9)",
           lineHeight: 1.15,
         }}
       >
@@ -145,7 +131,6 @@ export const PWEditsTemplate: React.FC<TemplateProps> = ({
           const relFrame       = frame - wordStartFrame;
           const isSpoken       = relFrame >= 0;
 
-          // Pure fade-in over ~12 frames (no slide, no spring)
           const opacity = isSpoken
             ? interpolate(relFrame, [0, 12], [0, 1], {
                 extrapolateLeft: "clamp",
@@ -169,7 +154,7 @@ export const PWEditsTemplate: React.FC<TemplateProps> = ({
         })}
       </div>
 
-      {/* ── BOTTOM LINE — solid accent color, glow + stroke via text-shadow ──────────── */}
+      {/* ── BOTTOM LINE — solid accent color, glow + stroke ── */}
       {bottomWords.length > 0 && (
         <div
           style={{
@@ -209,23 +194,20 @@ export const PWEditsTemplate: React.FC<TemplateProps> = ({
               extrapolateRight: "clamp",
             });
 
-            // All effects via text-shadow — no background-clip, no filter, no box artifacts
             const strokeShadow = [
               "-2px -2px 0 #000",
               " 2px -2px 0 #000",
               "-2px  2px 0 #000",
               " 2px  2px 0 #000",
-              "-2px  0   0 #000",
-              " 2px  0   0 #000",
-              " 0   -2px 0 #000",
-              " 0    2px 0 #000",
             ];
             const glowShadow = [
               `0 0 18px ${glowAccent}`,
               `0 0 35px ${hexToRgba(activeAccent, 0.55)}`,
               `0 3px 8px rgba(0,0,0,0.8)`,
             ];
-            const combinedShadow = [...strokeShadow, ...glowShadow].join(",");
+            const combinedShadow = isPlaying
+              ? strokeShadow.join(",")
+              : [...strokeShadow, ...glowShadow].join(",");
 
             return (
               <span
@@ -248,5 +230,5 @@ export const PWEditsTemplate: React.FC<TemplateProps> = ({
       )}
     </div>
   );
-};
-
+});
+PWEditsTemplate.displayName = "PWEditsTemplate";

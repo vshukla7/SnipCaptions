@@ -1,17 +1,11 @@
 /**
  * HighlightTemplate — Premium word-by-word highlight
- *
- * • All words pre-rendered (no layout shift)
- * • Active word: accent color + multi-layer glow bloom + subtle scale up
- * • Past words: bright white
- * • Unspoken words: dimmed and slightly smaller
- * • Smooth spring transition on each new word
  */
 import React from "react";
 import { spring, interpolate } from "remotion";
 import { TemplateProps } from "./types";
 
-export const HighlightTemplate: React.FC<TemplateProps> = ({
+export const HighlightTemplate: React.FC<TemplateProps> = React.memo(({
   activeLine,
   baseFont,
   fontSize,
@@ -20,6 +14,7 @@ export const HighlightTemplate: React.FC<TemplateProps> = ({
   frame,
   fps,
   time,
+  isPlaying,
 }) => {
   if (!activeLine) return null;
 
@@ -61,7 +56,9 @@ export const HighlightTemplate: React.FC<TemplateProps> = ({
           ? "#FFFFFF"
           : "rgba(255,255,255,0.30)";
 
-        const glowBloom = isCurrent
+        const glowBloom = isPlaying
+          ? "none"
+          : isCurrent
           ? `0 0 14px ${accent}, 0 0 32px ${accent}99, 0 0 60px ${accent}33, 0 3px 14px rgba(0,0,0,0.6)`
           : isSpoken
           ? "0 2px 10px rgba(0,0,0,0.5)"
@@ -86,4 +83,5 @@ export const HighlightTemplate: React.FC<TemplateProps> = ({
       })}
     </div>
   );
-};
+});
+HighlightTemplate.displayName = "HighlightTemplate";

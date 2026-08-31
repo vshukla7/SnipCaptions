@@ -15,4 +15,5 @@ export interface TemplateProps {
   prevWordsStr: string;
   nextWordsStr: string;
   customFontFamily?: string | null;
+  isPlaying?: boolean;
 }

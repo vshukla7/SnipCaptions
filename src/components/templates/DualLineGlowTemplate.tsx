@@ -1,14 +1,5 @@
 /**
  * DualLineGlowTemplate — Retro Duo style
- *
- * Always renders TWO rows:
- *   TOP    → first half of line words, bold uppercase, word-by-word FADE-IN + glow
- *   BOTTOM → second half, cursive, slide-up as spoken
- *
- * KEY FIXES:
- * 1. `splitAt` always splits (no >=4 guard), so even 2-3 word lines show 2 rows.
- * 2. All words always rendered (opacity:0 when unspoken) — no flex reflow / glitch.
- * 3. Top line uses pure fade-in (opacity only), NO scale pop.
  */
 
 import React from "react";
@@ -18,7 +9,7 @@ import { TemplateProps } from "./types";
 const TOP_FONT    = '"Impact", "Bebas Neue", "NCL Gasdrifo", sans-serif';
 const BOTTOM_FONT = '"Longmile", "Dancing Script", "Caveat", "Celosia Nature", cursive';
 
-export const DualLineGlowTemplate: React.FC<TemplateProps> = ({
+export const DualLineGlowTemplate: React.FC<TemplateProps> = React.memo(({
   activeLine,
   time,
   frame,
@@ -27,18 +18,13 @@ export const DualLineGlowTemplate: React.FC<TemplateProps> = ({
   fontSize,
   accentColor,
   customFontFamily,
+  isPlaying,
 }) => {
   if (!activeLine) return null;
 
   const words = activeLine.words;
   if (!words.length) return null;
 
-  // Always split into top/bottom — even 2-3 word lines become 2 rows
-  // 1 word  → top=[w0],         bottom=[]
-  // 2 words → top=[w0],         bottom=[w1]
-  // 3 words → top=[w0,w1],      bottom=[w2]
-  // 4 words → top=[w0,w1],      bottom=[w2,w3]
-  // 6 words → top=[w0,w1,w2],   bottom=[w3,w4,w5]
   const splitAt    = words.length === 1 ? 1 : Math.ceil(words.length / 2);
   const topWords    = words.slice(0, splitAt);
   const bottomWords = words.slice(splitAt);
@@ -80,7 +66,6 @@ export const DualLineGlowTemplate: React.FC<TemplateProps> = ({
           const isSpoken       = relFrame >= 0;
           const isCurrent      = time >= w.start && time < w.end;
 
-          // Quick pop-in transition (scale 0.85 to 1.0)
           const scaleSpring = isSpoken
             ? spring({
                 frame: relFrame,
@@ -104,8 +89,10 @@ export const DualLineGlowTemplate: React.FC<TemplateProps> = ({
               })
             : 0;
 
-          // Intense outer glow when active
-          const glowBloom = isCurrent
+          // Intense outer glow when active (disabled during playback)
+          const glowBloom = isPlaying
+            ? "none"
+            : isCurrent
             ? `0 0 10px rgba(255, 200, 0, 0.7), 0 0 20px rgba(255, 200, 0, 0.5)`
             : isSpoken
             ? `0 0 5px rgba(255, 200, 0, 0.3)`
@@ -126,7 +113,7 @@ export const DualLineGlowTemplate: React.FC<TemplateProps> = ({
                   : "transparent",
                 textShadow: glowBloom !== "none"
                   ? `${glowBloom}, ${shadowBase}`
-                  : "none",
+                  : isPlaying ? "none" : shadowBase,
                 opacity,
                 transform: `scale(${scale})`,
                 transition: "color 0.15s ease, text-shadow 0.22s ease",
@@ -141,7 +128,6 @@ export const DualLineGlowTemplate: React.FC<TemplateProps> = ({
       </div>
 
       {/* ─── BOTTOM LINE — always rendered, spring slide-up per word ─── */}
-      {/* Render the container even if bottomWords is empty to hold layout */}
       <div
         style={{
           display: "flex",
@@ -187,7 +173,7 @@ export const DualLineGlowTemplate: React.FC<TemplateProps> = ({
                 fontWeight: 500,
                 textTransform: "lowercase",
                 color: isSpoken ? "#E0E0E0" : "transparent",
-                textShadow: isSpoken ? bottomShadowBase : "none",
+                textShadow: isPlaying ? "none" : isSpoken ? bottomShadowBase : "none",
                 opacity: op,
                 transform: `translateY(${ty}px)`,
                 willChange: "transform, opacity",
@@ -201,4 +187,5 @@ export const DualLineGlowTemplate: React.FC<TemplateProps> = ({
       </div>
     </div>
   );
-};
+});
+DualLineGlowTemplate.displayName = "DualLineGlowTemplate";

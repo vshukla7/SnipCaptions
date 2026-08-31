@@ -1,5 +1,5 @@
 import React from "react";
-import { spring, interpolate, AbsoluteFill } from "remotion";
+import { spring, interpolate } from "remotion";
 import type { Word } from "@/lib/types";
 
 // JSON Configuration Interface
@@ -42,9 +42,10 @@ export interface YellowScriptCaptionProps {
   height: number;
   scale?: number;
   config?: YellowScriptConfig;
+  isPlaying?: boolean;
 }
 
-export const YellowScriptCaption: React.FC<YellowScriptCaptionProps> = ({
+export const YellowScriptCaption: React.FC<YellowScriptCaptionProps> = React.memo(({
   activeLine,
   time,
   frame,
@@ -53,6 +54,7 @@ export const YellowScriptCaption: React.FC<YellowScriptCaptionProps> = ({
   height,
   scale: baseScale = 1.0,
   config = defaultYellowScriptConfig,
+  isPlaying,
 }) => {
   if (!activeLine || activeLine.words.length === 0) return null;
 
@@ -98,7 +100,7 @@ export const YellowScriptCaption: React.FC<YellowScriptCaptionProps> = ({
   );
 
   const fontSize = Math.round(width * 0.065);
-  const dropShadow = "0 3px 8px rgba(0,0,0,0.8), 0 1px 3px rgba(0,0,0,0.6)";
+  const dropShadow = isPlaying ? "none" : "0 3px 8px rgba(0,0,0,0.8), 0 1px 3px rgba(0,0,0,0.6)";
 
   return (
     <div
@@ -187,4 +189,5 @@ export const YellowScriptCaption: React.FC<YellowScriptCaptionProps> = ({
       )}
     </div>
   );
-};
+});
+YellowScriptCaption.displayName = "YellowScriptCaption";

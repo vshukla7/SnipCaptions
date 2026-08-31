@@ -1,7 +1,7 @@
 import React from "react";
 import { TemplateProps } from "./types";
 
-export const BlackPunchTemplate: React.FC<TemplateProps> = ({
+export const BlackPunchTemplate: React.FC<TemplateProps> = React.memo(({
   activeWord,
   baseFont,
   fontSize,
@@ -9,6 +9,7 @@ export const BlackPunchTemplate: React.FC<TemplateProps> = ({
   prevWordsStr,
   nextWordsStr,
   customFontFamily,
+  isPlaying,
 }) => {
   if (!activeWord) return null;
 
@@ -43,7 +44,7 @@ export const BlackPunchTemplate: React.FC<TemplateProps> = ({
           fontWeight: 900,
           textTransform: "uppercase",
           WebkitTextStroke: "1px rgba(255,255,255,0.8)",
-          textShadow: "0 2px 8px rgba(0,0,0,0.4)",
+          textShadow: isPlaying ? "none" : "0 2px 8px rgba(0,0,0,0.4)",
         }}
       >
         {activeWord.word}
@@ -55,4 +56,5 @@ export const BlackPunchTemplate: React.FC<TemplateProps> = ({
       )}
     </div>
   );
-};
+});
+BlackPunchTemplate.displayName = "BlackPunchTemplate";

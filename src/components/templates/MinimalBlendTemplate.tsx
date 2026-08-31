@@ -1,11 +1,5 @@
 /**
  * MinimalBlendTemplate — Minimalist Blend style
- *
- * Captions rendered in a neat, left-aligned block on the video:
- *   • Ultra-heavy Neue Haas Grotesk / Helvetica Neue typography
- *   • Smooth, eased spring slide-up animations (damping: 18)
- *   • Smart Hero / Key words rendered extra-large in UPPERCASE
- *   • Mix-blend-mode "difference" on Hero words to dynamically invert against video frames
  */
 
 import React from "react";
@@ -14,19 +8,19 @@ import type { TemplateProps } from "./types";
 
 const DEFAULT_FONT = '"Neue Haas Grotesk Display Pro", "Helvetica Neue", "Syne", sans-serif';
 
-export const MinimalBlendTemplate: React.FC<TemplateProps> = ({
+export const MinimalBlendTemplate: React.FC<TemplateProps> = React.memo(({
   activeLine,
   frame,
   fps,
   width,
   fontSize,
   customFontFamily,
+  isPlaying,
 }) => {
   if (!activeLine || !activeLine.words.length) return null;
 
   const words = activeLine.words;
 
-  // Pick the longest word in the line as the "isBig" keyword highlight
   const longestWord = words.reduce((best, w) =>
     w.word.length > best.word.length ? w : best,
     words[0],
@@ -34,9 +28,8 @@ export const MinimalBlendTemplate: React.FC<TemplateProps> = ({
 
   const activeFont = customFontFamily || DEFAULT_FONT;
 
-  // Dynamic scaling for font size configurations
-  const normalSize = Math.round(fontSize * 0.9);   // ~62px
-  const bigSize    = Math.round(fontSize * 1.6);   // ~110px
+  const normalSize = Math.round(fontSize * 0.9);
+  const bigSize    = Math.round(fontSize * 1.6);
 
   return (
     <div
@@ -57,14 +50,13 @@ export const MinimalBlendTemplate: React.FC<TemplateProps> = ({
         const relFrame       = frame - wordStartFrame;
         const isSpoken       = relFrame >= 0;
 
-        // ── Eased Smooth Slide-up Physics ─────────────────────────────────────
         const spr = spring({
           frame: isSpoken ? relFrame : 0,
           fps,
           config: {
             mass: 0.8,
             stiffness: 180,
-            damping: 18, // Smooth ease without heavy bounce
+            damping: 18,
           },
         });
 
@@ -77,7 +69,6 @@ export const MinimalBlendTemplate: React.FC<TemplateProps> = ({
           extrapolateRight: "clamp",
         });
 
-        // Determine if word is highlighted as Big
         const isBig = (w as any).isBig ?? (w.word === longestWord.word);
         const wordSize = isBig ? bigSize : normalSize;
         const isBlendDifference = isBig;
@@ -92,10 +83,9 @@ export const MinimalBlendTemplate: React.FC<TemplateProps> = ({
               visibility: isSpoken ? "visible" : "hidden",
               fontSize: wordSize,
               color: "#FFFFFF",
-              // Mix-blend mode difference implementation
               mixBlendMode: isBlendDifference ? "difference" : "normal",
               textTransform: isBig ? "uppercase" : "capitalize",
-              filter: "drop-shadow(0px 4px 12px rgba(0,0,0,0.5))",
+              filter: isPlaying ? "none" : "drop-shadow(0px 4px 12px rgba(0,0,0,0.5))",
               willChange: "transform, opacity",
               pointerEvents: "none",
             }}
@@ -106,4 +96,5 @@ export const MinimalBlendTemplate: React.FC<TemplateProps> = ({
       })}
     </div>
   );
-};
+});
+MinimalBlendTemplate.displayName = "MinimalBlendTemplate";

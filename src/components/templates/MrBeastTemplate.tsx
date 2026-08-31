@@ -1,12 +1,5 @@
 /**
  * MrBeastTemplate — MrBeast Style
- *
- * Big, bold, punchy uppercase captions:
- *   • Bebas Neue / Futura Bold font
- *   • Fast spring pop animation (scale 0.4 -> 1.25 -> 1.0)
- *   • Word-by-word yellow/accent highlight as spoken
- *   • Thick black stroke outline and solid retro black drop-shadow
- *   • Continuous slow group zoom camera push-in
  */
 
 import React from "react";
@@ -15,7 +8,7 @@ import type { TemplateProps } from "./types";
 
 const DEFAULT_FONT = '"Bebas Neue", "Futura-Bold", "Impact", sans-serif';
 
-export const MrBeastTemplate: React.FC<TemplateProps> = ({
+export const MrBeastTemplate: React.FC<TemplateProps> = React.memo(({
   activeLine,
   frame,
   fps,
@@ -23,12 +16,12 @@ export const MrBeastTemplate: React.FC<TemplateProps> = ({
   fontSize,
   accentColor,
   customFontFamily,
+  isPlaying,
 }) => {
   if (!activeLine || !activeLine.words.length) return null;
 
   const words = activeLine.words;
 
-  // ── Group scale: continuous slow camera push-in ────────────────────────────
   const lineStartFrame = Math.round(activeLine.start * fps);
   const lineEndFrame   = Math.round(activeLine.end   * fps);
   const totalDuration  = Math.max(1, lineEndFrame - lineStartFrame);
@@ -41,10 +34,9 @@ export const MrBeastTemplate: React.FC<TemplateProps> = ({
     { extrapolateLeft: "clamp", extrapolateRight: "clamp" },
   );
 
-  // ── Styling configuration ──────────────────────────────────────────────────
   const activeFont = customFontFamily || DEFAULT_FONT;
   const highlight = accentColor || "#FFE600";
-  const size = Math.round(fontSize * 1.6); // MrBeast style is extra large
+  const size = Math.round(fontSize * 1.6);
 
   return (
     <div
@@ -66,18 +58,16 @@ export const MrBeastTemplate: React.FC<TemplateProps> = ({
 
         if (!isSpoken) return null;
 
-        // ── Fast-to-slow Spring Pop Animation Physics ─────────────────────────
         const spr = spring({
           frame: relFrame,
           fps,
           config: {
             mass: 0.6,
-            stiffness: 300, // Fast initial pop
-            damping: 12,    // Smooth slowing down/settling
+            stiffness: 300,
+            damping: 12,
           },
         });
 
-        // Scale: 0.4 -> 1.25 (Overshoot) -> 1.0 (Settles)
         const popScale = interpolate(spr, [0, 0.7, 1], [0.4, 1.25, 1.0], {
           extrapolateRight: "clamp",
         });
@@ -86,7 +76,6 @@ export const MrBeastTemplate: React.FC<TemplateProps> = ({
           extrapolateRight: "clamp",
         });
 
-        // Highlight the currently spoken word
         const isCurrent = frame / fps >= w.start && frame / fps < w.end;
         const isYellowHighlight = (w as any).highlight || isCurrent;
 
@@ -106,7 +95,7 @@ export const MrBeastTemplate: React.FC<TemplateProps> = ({
               WebkitTextStroke: "3.5px #000000",
               // @ts-ignore
               paintOrder: "stroke fill",
-              filter: "drop-shadow(4px 4px 0px #000000)",
+              filter: isPlaying ? "none" : "drop-shadow(4px 4px 0px #000000)",
             }}
           >
             {w.word}
@@ -115,4 +104,5 @@ export const MrBeastTemplate: React.FC<TemplateProps> = ({
       })}
     </div>
   );
-};
+});
+MrBeastTemplate.displayName = "MrBeastTemplate";

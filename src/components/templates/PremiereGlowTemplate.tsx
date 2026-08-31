@@ -1,12 +1,5 @@
 /**
  * PremiereGlowTemplate — Premiere Pro styled glow captions
- *
- * Captions rendered in a neat, left-aligned block on the video:
- *   • Ultra-heavy Neue Haas Grotesk / Helvetica Neue typography
- *   • Pre-rendered layout structure (no layout shift/word jumping)
- *   • Smooth, eased spring slide-up animations
- *   • The biggest (hero) word is highlighted in UPPERCASE, styled with a
- *     vibrant Premiere Pro-style text gradient and multi-layered neon glow.
  */
 
 import React from "react";
@@ -15,7 +8,7 @@ import type { TemplateProps } from "./types";
 
 const DEFAULT_FONT = '"Neue Haas Grotesk Display Pro", "Helvetica Neue", "Syne", sans-serif';
 
-export const PremiereGlowTemplate: React.FC<TemplateProps> = ({
+export const PremiereGlowTemplate: React.FC<TemplateProps> = React.memo(({
   activeLine,
   frame,
   fps,
@@ -23,6 +16,7 @@ export const PremiereGlowTemplate: React.FC<TemplateProps> = ({
   fontSize,
   accentColor,
   customFontFamily,
+  isPlaying,
 }) => {
   if (!activeLine || !activeLine.words.length) return null;
 
@@ -89,7 +83,10 @@ export const PremiereGlowTemplate: React.FC<TemplateProps> = ({
           ? `linear-gradient(135deg, #FFF9C4 0%, ${accent} 50%, #FF3D00 100%)`
           : undefined;
 
-        const glowFilter = isBig
+        // Disable heavy real-time CSS filters during active playback for 60fps performance
+        const glowFilter = isPlaying
+          ? "none"
+          : isBig
           ? `drop-shadow(0px 0px 8px ${accent}) drop-shadow(0px 0px 24px #FF3D00) drop-shadow(0px 4px 12px rgba(0,0,0,0.6))`
           : "drop-shadow(0px 4px 12px rgba(0,0,0,0.5))";
 
@@ -119,4 +116,5 @@ export const PremiereGlowTemplate: React.FC<TemplateProps> = ({
       })}
     </div>
   );
-};
+});
+PremiereGlowTemplate.displayName = "PremiereGlowTemplate";

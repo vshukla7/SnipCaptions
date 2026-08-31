@@ -2,7 +2,7 @@ import React from "react";
 import { spring, interpolate } from "remotion";
 import { TemplateProps } from "./types";
 
-export const KineticTemplate: React.FC<TemplateProps> = ({
+export const KineticTemplate: React.FC<TemplateProps> = React.memo(({
   activeLine,
   baseFont,
   fontSize,
@@ -11,6 +11,7 @@ export const KineticTemplate: React.FC<TemplateProps> = ({
   frame,
   fps,
   time,
+  isPlaying,
 }) => {
   if (!activeLine) return null;
   return (
@@ -51,7 +52,7 @@ export const KineticTemplate: React.FC<TemplateProps> = ({
               display: "inline-block",
               color,
               transform,
-              textShadow: "0 2px 12px rgba(0,0,0,0.55)",
+              textShadow: isPlaying ? "none" : "0 2px 12px rgba(0,0,0,0.55)",
               margin: "0 0.18em",
               fontWeight: 800,
               opacity,
@@ -64,4 +65,5 @@ export const KineticTemplate: React.FC<TemplateProps> = ({
       })}
     </div>
   );
-};
+});
+KineticTemplate.displayName = "KineticTemplate";

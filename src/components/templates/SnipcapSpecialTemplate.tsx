@@ -4,22 +4,13 @@ import { TemplateProps } from "./types";
 
 /**
  * Snipcap Special — Kinetic Scene-Based Typography
- *
- * SCENE A (dramatic): when the line has ≥4 words, split into a 3-layer stack:
- *   Top    → first 1-2 words, small white cursive, lowercase
- *   Hero   → the next 1 "hero word" (longest/most emphatic), BIG + blur-in
- *   Bottom → remaining words, small below, appear inline no animation
- *
- * SCENE B (plain): lines with ≤3 words just appear one-by-one inline, no animation.
- *
- * Words in both scenes only appear as they are spoken (word-reveal timing).
  */
 
 const CURSIVE = '"Celosia Nature", "Caveat", "Kalam", cursive';
 const HERO    = '"Gilroy", "SF Pro Display", sans-serif';
 const SMALL   = '"SF Pro Display", "Inter", sans-serif';
 
-export const SnipcapSpecialTemplate: React.FC<TemplateProps> = ({
+export const SnipcapSpecialTemplate: React.FC<TemplateProps> = React.memo(({
   activeLine,
   time,
   frame,
@@ -28,6 +19,7 @@ export const SnipcapSpecialTemplate: React.FC<TemplateProps> = ({
   fontSize,
   accentColor,
   customFontFamily,
+  isPlaying,
 }) => {
   if (!activeLine) return null;
 
@@ -52,7 +44,7 @@ export const SnipcapSpecialTemplate: React.FC<TemplateProps> = ({
           maxWidth: width * 0.9,
           textAlign: "center",
           lineHeight: 1.2,
-          textShadow: "0 2px 8px rgba(0,0,0,0.7)",
+          textShadow: isPlaying ? "none" : "0 2px 8px rgba(0,0,0,0.7)",
         }}
       >
         {spokenWords.map((w, i) => (
@@ -127,7 +119,7 @@ export const SnipcapSpecialTemplate: React.FC<TemplateProps> = ({
           justifyContent: "center",
           gap: "0.28em",
           textTransform: "lowercase",
-          textShadow: "0 2px 8px rgba(0,0,0,0.6)",
+          textShadow: isPlaying ? "none" : "0 2px 8px rgba(0,0,0,0.6)",
           minHeight: "1em",
         }}
       >
@@ -175,11 +167,13 @@ export const SnipcapSpecialTemplate: React.FC<TemplateProps> = ({
             color: accentColor || "#30d158",
             textTransform: "uppercase",
             letterSpacing: "-0.01em",
-            textShadow: `0 0 18px ${accentColor || "#30d158"}55, 0 3px 14px rgba(0,0,0,0.75)`,
+            textShadow: isPlaying
+              ? "none"
+              : `0 0 18px ${accentColor || "#30d158"}55, 0 3px 14px rgba(0,0,0,0.75)`,
             transform: `scale(${heroScale})`,
             opacity: heroOpacity,
-            filter: `blur(${heroBlur}px)`,
-            willChange: "transform, opacity, filter",
+            filter: isPlaying ? "none" : `blur(${heroBlur}px)`,
+            willChange: "transform, opacity",
             lineHeight: 1.0,
           }}
         >
@@ -200,7 +194,7 @@ export const SnipcapSpecialTemplate: React.FC<TemplateProps> = ({
           gap: "0.28em",
           letterSpacing: "0.02em",
           textTransform: "uppercase",
-          textShadow: "0 2px 8px rgba(0,0,0,0.6)",
+          textShadow: isPlaying ? "none" : "0 2px 8px rgba(0,0,0,0.6)",
           minHeight: "1em",
         }}
       >
@@ -214,4 +208,5 @@ export const SnipcapSpecialTemplate: React.FC<TemplateProps> = ({
       </div>
     </div>
   );
-};
+});
+SnipcapSpecialTemplate.displayName = "SnipcapSpecialTemplate";

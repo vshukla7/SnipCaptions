@@ -1,12 +1,13 @@
 import React from "react";
 import { TemplateProps } from "./types";
 
-export const OneWordTemplate: React.FC<TemplateProps> = ({
+export const OneWordTemplate: React.FC<TemplateProps> = React.memo(({
   activeWord,
   baseFont,
   fontSize,
   accentColor,
   width,
+  isPlaying,
 }) => {
   if (!activeWord) return null;
   return (
@@ -17,7 +18,7 @@ export const OneWordTemplate: React.FC<TemplateProps> = ({
         fontWeight: 900,
         textAlign: "center",
         color: accentColor || "#ffffff",
-        textShadow: "0 2px 14px rgba(0,0,0,0.65)",
+        textShadow: isPlaying ? "none" : "0 2px 14px rgba(0,0,0,0.65)",
         maxWidth: width * 0.9,
         textTransform: "uppercase",
       }}
@@ -25,4 +26,5 @@ export const OneWordTemplate: React.FC<TemplateProps> = ({
       {activeWord.word}
     </div>
   );
-};
+});
+OneWordTemplate.displayName = "OneWordTemplate";

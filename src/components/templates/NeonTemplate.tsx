@@ -1,14 +1,20 @@
 import React from "react";
 import { TemplateProps } from "./types";
 
-export const NeonTemplate: React.FC<TemplateProps> = ({
+export const NeonTemplate: React.FC<TemplateProps> = React.memo(({
   activeLine,
   baseFont,
   fontSize,
   accentColor,
   width,
+  isPlaying,
 }) => {
   if (!activeLine) return null;
+
+  const shadow = isPlaying
+    ? "none"
+    : `0 0 8px ${accentColor}, 0 0 22px ${accentColor}, 0 2px 10px rgba(0,0,0,0.6)`;
+
   return (
     <div
       style={{
@@ -19,7 +25,7 @@ export const NeonTemplate: React.FC<TemplateProps> = ({
         letterSpacing: "0.02em",
         textAlign: "center",
         lineHeight: 1.1,
-        textShadow: `0 0 8px ${accentColor}, 0 0 22px ${accentColor}, 0 2px 10px rgba(0,0,0,0.6)`,
+        textShadow: shadow,
         color: "#ffffff",
         maxWidth: width * 0.9,
       }}
@@ -31,4 +37,5 @@ export const NeonTemplate: React.FC<TemplateProps> = ({
       ))}
     </div>
   );
-};
+});
+NeonTemplate.displayName = "NeonTemplate";
