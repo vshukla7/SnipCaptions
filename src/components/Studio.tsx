@@ -6,6 +6,7 @@ import { useApp } from "@/lib/store";
 import { CAPTION_THEMES } from "@/lib/types";
 import { CaptionComposition } from "./CaptionComposition";
 import { ExportResolutionModal } from "./ExportResolutionModal";
+import { RENDER_WORKER_CODE } from "@/lib/renderWorkerCode";
 
 const FPS = 30;
 
@@ -535,10 +536,177 @@ export function Studio() {
     return () => observer.disconnect();
   }, [naturalAspect]);
 
+  const runSingleThreadExport = async () => {
+    const { renderMediaOnWeb, canRenderMediaOnWeb } = await import("@remotion/web-renderer");
+    const controller = new AbortController();
+
+    const aspectW = renderWidth;
+    const aspectH = renderHeight;
+
+    // 1. Verify browser compatibility and determine audio requirements
+    let isMuted = false;
+    const renderCheck = await canRenderMediaOnWeb({
+      container: "mp4",
+      videoCodec: "h264",
+      width: aspectW,
+      height: aspectH,
+      muted: false,
+    });
+
+    if (!renderCheck.canRender) {
+      console.warn("[Studio] canRenderMediaOnWeb failed with default settings:", renderCheck.issues);
+
+      // Check if the issue is audio encoder related (or if AudioEncoder is undefined in the environment)
+      const hasAudioIssue = renderCheck.issues.some(
+        (issue) =>
+          issue.type === "audio-codec-unsupported" ||
+          issue.message.toLowerCase().includes("audio")
+      ) || (typeof window !== "undefined" && !("AudioEncoder" in window));
+
+      if (hasAudioIssue) {
+        console.log("[Studio] Browser lacks AudioEncoder. Attempting muted render check...");
+        const mutedCheck = await canRenderMediaOnWeb({
+          container: "mp4",
+          videoCodec: "h264",
+          width: aspectW,
+          height: aspectH,
+          muted: true,
+        });
+
+        if (mutedCheck.canRender) {
+          isMuted = true;
+          console.log("[Studio] Muted render check succeeded. Video will be exported without audio.");
+        } else {
+          const errorMsg = mutedCheck.issues.map((i) => i.message).join(", ") || "Video rendering not supported.";
+          throw new Error(errorMsg);
+        }
+      } else {
+        const errorMsg = renderCheck.issues.map((i) => i.message).join(", ") || "Your browser doesn't support client-side video rendering.";
+        throw new Error(errorMsg);
+      }
+    }
+
+    // 2. Determine export source video URL:
+    const exportSrc = originalVideoUrl || videoUrl || "";
+    const { getBlob } = await renderMediaOnWeb({
+      composition: {
+        id: "snipcaptions",
+        component: CaptionComposition as never,
+        durationInFrames,
+        fps: FPS,
+        width: aspectW,
+        height: aspectH,
+      } as never,
+      inputProps: {
+        src: exportSrc,
+        words,
+        theme: captionTheme,
+        accentColor: accent,
+        position: captionPosition,
+        scale: captionScale,
+        customFontFamily,
+        mutedVideo: isMuted,
+      },
+      container: "mp4",
+      videoBitrate: "medium",
+      audioBitrate: "medium",
+      hardwareAcceleration: "no-preference",
+      muted: isMuted,
+      delayRenderTimeoutInMilliseconds: 80000,
+      signal: controller.signal,
+      onProgress: (p: unknown) => {
+        const value = typeof p === "number" ? p : (p as { progress: number }).progress || 0;
+        setProgress(value);
+      },
+    });
+
+    const blob = await getBlob();
+
+    // 3. Merging Audio on Safari/iOS using FFmpeg.wasm (if video is muted and original videoFile is present)
+    let finalBlob = blob;
+    let audioMuxSuccess = false;
+    
+    if (isMuted && videoFile) {
+      console.log("[Studio] Muted export completed. Initiating FFmpeg audio muxing...");
+      setStatusMessage("Muxing audio track with FFmpeg…");
+      setProgress(0);
+      try {
+        const { FFmpeg } = await import("@ffmpeg/ffmpeg");
+        const { fetchFile, toBlobURL } = await import("@ffmpeg/util");
+
+        const ffmpeg = new FFmpeg();
+        
+        ffmpeg.on("log", ({ message }) => {
+          console.log("[FFmpeg]", message);
+        });
+
+        const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+        await ffmpeg.load({
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+        });
+
+        await ffmpeg.writeFile("muted.mp4", await fetchFile(blob));
+        await ffmpeg.writeFile("original.mp4", await fetchFile(videoFile));
+
+        await ffmpeg.exec([
+          "-i", "muted.mp4",
+          "-i", "original.mp4",
+          "-map", "0:v",
+          "-map", "1:a",
+          "-c", "copy",
+          "output.mp4"
+        ]);
+
+        const data = await ffmpeg.readFile("output.mp4");
+        if (data instanceof Uint8Array) {
+          finalBlob = new Blob([data as BlobPart], { type: "video/mp4" });
+          console.log("[Studio] FFmpeg audio muxing successful!");
+          audioMuxSuccess = true;
+        } else {
+          throw new Error("FFmpeg returned string data instead of binary array.");
+        }
+      } catch (ffmpegErr) {
+        console.error("[Studio] FFmpeg audio muxing failed, falling back to muted video", ffmpegErr);
+      }
+    }
+
+    const url = URL.createObjectURL(finalBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `snipcaptions-${captionTheme}-${Date.now()}.mp4`;
+    a.target = "_self";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    setProgress(1);
+    setStatusMessage("Export complete!");
+
+    if (isMuted) {
+      if (audioMuxSuccess) {
+        setToast({
+          type: "success",
+          message: "Video exported successfully with audio restored via FFmpeg!",
+        });
+      } else {
+        setToast({
+          type: "warning",
+          message: "Video exported without audio due to iOS Safari limits. For sound, use a desktop browser.",
+        });
+      }
+    } else {
+      setToast({
+        type: "success",
+        message: "Video exported successfully with frame-accurate captions!",
+      });
+    }
+  };
+
   const handleExport = async () => {
     if (!ready) return;
 
-    // Pause the player when video exports to prevent duplicate resource usage
     if (playerRef.current) {
       playerRef.current.pause();
     }
@@ -546,188 +714,228 @@ export function Studio() {
     setExporting(true);
     setStatus("exporting");
     setProgress(0);
-    setStatusMessage("Rendering video…");
-    try {
-      const { renderMediaOnWeb, canRenderMediaOnWeb } = await import("@remotion/web-renderer");
-      const controller = new AbortController();
+    setStatusMessage("Initializing rendering engine…");
 
-      const aspectW = renderWidth;
-      const aspectH = renderHeight;
+    const aspectW = renderWidth;
+    const aspectH = renderHeight;
 
-      // 1. Verify browser compatibility and determine audio requirements
-      let isMuted = false;
-      const renderCheck = await canRenderMediaOnWeb({
-        container: "mp4",
-        videoCodec: "h264",
-        width: aspectW,
-        height: aspectH,
-        muted: false,
-      });
+    const isParallelSupported =
+      typeof Worker !== "undefined" &&
+      typeof OffscreenCanvas !== "undefined" &&
+      Boolean(videoFile);
 
-      if (!renderCheck.canRender) {
-        console.warn("[Studio] canRenderMediaOnWeb failed with default settings:", renderCheck.issues);
+    if (isParallelSupported && videoFile) {
+      const workers: Worker[] = [];
+      let workerUrl = "";
+      try {
+        console.log("[Studio:export] Initializing multi-threaded parallel rendering engine...");
+        
+        // Dynamically calculate max worker threads: prevent mobile RAM crashes by capping at 4
+        const workerCount = Math.min(navigator.hardwareConcurrency || 2, 4);
+        console.log(`[Studio:export] Spawning ${workerCount} parallel rendering threads`);
 
-        // Check if the issue is audio encoder related (or if AudioEncoder is undefined in the environment)
-        const hasAudioIssue = renderCheck.issues.some(
-          (issue) =>
-            issue.type === "audio-codec-unsupported" ||
-            issue.message.toLowerCase().includes("audio")
-        ) || (typeof window !== "undefined" && !("AudioEncoder" in window));
+        // Split total duration into equal chunks
+        const totalDuration = durationInSeconds;
+        const chunkSize = totalDuration / workerCount;
+        
+        const chunks = Array.from({ length: workerCount }, (_, i) => {
+          const startTime = i * chunkSize;
+          const endTime = i === workerCount - 1 ? totalDuration : (i + 1) * chunkSize;
+          return { chunkIndex: i, startTime, endTime };
+        });
 
-        if (hasAudioIssue) {
-          console.log("[Studio] Browser lacks AudioEncoder. Attempting muted render check...");
-          const mutedCheck = await canRenderMediaOnWeb({
-            container: "mp4",
-            videoCodec: "h264",
-            width: aspectW,
-            height: aspectH,
-            muted: true,
+        // Instantiate Web Workers via inline Blob URL
+        const workerBlob = new Blob([RENDER_WORKER_CODE], { type: "application/javascript" });
+        workerUrl = URL.createObjectURL(workerBlob);
+
+        const progressTracks = Array(workerCount).fill(0);
+        const updateCombinedProgress = () => {
+          const sum = progressTracks.reduce((a, b) => a + b, 0);
+          setProgress(sum / workerCount);
+        };
+
+        // Spawn workers and render each chunk concurrently
+        const workerPromises = chunks.map((chunk) => {
+          return new Promise<ArrayBuffer>((resolveWorker, rejectWorker) => {
+            const worker = new Worker(workerUrl);
+            workers.push(worker);
+
+            worker.onmessage = (event) => {
+              const { type, chunkIndex, current, total, status: workerStatus, error, buffer } = event.data;
+
+              if (type === "status") {
+                if (workerStatus === "loading") {
+                  setStatusMessage(`Thread ${chunkIndex + 1}/${workerCount} - Initializing FFmpeg…`);
+                } else if (workerStatus === "extracting") {
+                  setStatusMessage(`Thread ${chunkIndex + 1}/${workerCount} - Demuxing frames…`);
+                } else if (workerStatus === "rendering") {
+                  setStatusMessage(`Thread ${chunkIndex + 1}/${workerCount} - Overlaying subtitles…`);
+                } else if (workerStatus === "encoding") {
+                  setStatusMessage(`Thread ${chunkIndex + 1}/${workerCount} - Compiling MP4 chunk…`);
+                }
+              } else if (type === "progress") {
+                progressTracks[chunkIndex] = current / total;
+                updateCombinedProgress();
+              } else if (type === "success") {
+                console.log(`[Studio:export] Thread ${chunkIndex + 1} completed chunk rendering successfully.`);
+                resolveWorker(buffer);
+                worker.terminate();
+              } else if (type === "error") {
+                worker.terminate();
+                rejectWorker(new Error(error || `Worker ${chunkIndex + 1} failed.`));
+              }
+            };
+
+            worker.postMessage({
+              type: "start",
+              data: {
+                chunkIndex: chunk.chunkIndex,
+                videoFile: videoFile,
+                startTime: chunk.startTime,
+                endTime: chunk.endTime,
+                width: aspectW,
+                height: aspectH,
+                fps: FPS,
+                words: words,
+                theme: captionTheme,
+                accentColor: accent,
+                position: captionPosition,
+                scale: captionScale,
+                customFontFamily: customFontFamily,
+                origin: typeof window !== "undefined" ? window.location.origin : ""
+              }
+            });
           });
+        });
 
-          if (mutedCheck.canRender) {
-            isMuted = true;
-            console.log("[Studio] Muted render check succeeded. Video will be exported without audio.");
-          } else {
-            const errorMsg = mutedCheck.issues.map((i) => i.message).join(", ") || "Video rendering not supported.";
-            throw new Error(errorMsg);
-          }
-        } else {
-          const errorMsg = renderCheck.issues.map((i) => i.message).join(", ") || "Your browser doesn't support client-side video rendering.";
-          throw new Error(errorMsg);
+        const results = await Promise.all(workerPromises);
+        URL.revokeObjectURL(workerUrl);
+        workerUrl = "";
+
+        setStatusMessage("Muxing final video and audio tracks…");
+        setProgress(0.95);
+
+        // Concatenate rendered MP4 segments using main thread FFmpeg
+        const { FFmpeg } = await import("@ffmpeg/ffmpeg");
+        const { fetchFile, toBlobURL } = await import("@ffmpeg/util");
+        const ffmpeg = new FFmpeg();
+
+        ffmpeg.on("log", ({ message }) => {
+          console.log("[FFmpeg:concat]", message);
+        });
+
+        const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+        await ffmpeg.load({
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+        });
+
+        // Write chunks to MEMFS
+        let concatContent = "";
+        for (let i = 0; i < workerCount; i++) {
+          const chunkName = `chunk_${i}.mp4`;
+          await ffmpeg.writeFile(chunkName, new Uint8Array(results[i]));
+          concatContent += `file ${chunkName}\n`;
         }
-      }
 
-      // 2. Determine export source video URL:
-      const exportSrc = originalVideoUrl || videoUrl || "";
-      const { getBlob } = await renderMediaOnWeb({
-        composition: {
-          id: "snipcaptions",
-          component: CaptionComposition as never,
-          durationInFrames,
-          fps: FPS,
-          width: aspectW,
-          height: aspectH,
-        } as never,
-        inputProps: {
-          src: exportSrc,
-          words,
-          theme: captionTheme,
-          accentColor: accent,
-          position: captionPosition,
-          scale: captionScale,
-          customFontFamily,
-          mutedVideo: isMuted,
-        },
-        container: "mp4",
-        videoBitrate: "medium",
-        audioBitrate: "medium",
-        hardwareAcceleration: "no-preference",
-        muted: isMuted,
-        delayRenderTimeoutInMilliseconds: 80000,
-        signal: controller.signal,
-        onProgress: (p: unknown) => {
-          const value = typeof p === "number" ? p : (p as { progress?: number })?.progress ?? 0;
-          setProgress(value);
-        },
-      });
+        await ffmpeg.writeFile("concat.txt", concatContent);
+        await ffmpeg.writeFile("original.mp4", await fetchFile(videoFile));
 
-      const blob = await getBlob();
+        // Lossless concat demuxer
+        await ffmpeg.exec([
+          "-f", "concat",
+          "-safe", "0",
+          "-i", "concat.txt",
+          "-c", "copy",
+          "concatenated.mp4"
+        ]);
 
-      // 3. Merging Audio on Safari/iOS using FFmpeg.wasm (if video is muted and original videoFile is present)
-      let finalBlob = blob;
-      let audioMuxSuccess = false;
-      
-      if (isMuted && videoFile) {
-        console.log("[Studio] Muted export completed. Initiating FFmpeg audio muxing...");
-        setStatusMessage("Muxing audio track with FFmpeg…");
-        setProgress(0);
+        let finalOutputName = "concatenated.mp4";
         try {
-          const { FFmpeg } = await import("@ffmpeg/ffmpeg");
-          const { fetchFile, toBlobURL } = await import("@ffmpeg/util");
-
-          const ffmpeg = new FFmpeg();
-          
-          // Log messages from FFmpeg core
-          ffmpeg.on("log", ({ message }) => {
-            console.log("[FFmpeg]", message);
-          });
-
-          // Single-threaded core files from standard CDN (bypass SharedArrayBuffer/COOP/COEP isolation constraints)
-          const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
-          await ffmpeg.load({
-            coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-            wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-          });
-
-          // Write files in-memory
-          await ffmpeg.writeFile("muted.mp4", await fetchFile(blob));
-          await ffmpeg.writeFile("original.mp4", await fetchFile(videoFile));
-
-          // Run stream copy muxing (very fast since no decoding/encoding is done)
+          console.log("[Studio:export] Extracting audio from original video...");
           await ffmpeg.exec([
-            "-i", "muted.mp4",
             "-i", "original.mp4",
+            "-vn",
+            "-acodec", "copy",
+            "audio.aac"
+          ]);
+          
+          console.log("[Studio:export] Muxing audio track with concatenated video...");
+          await ffmpeg.exec([
+            "-i", "concatenated.mp4",
+            "-i", "audio.aac",
+            "-c:v", "copy",
+            "-c:a", "aac",
             "-map", "0:v",
             "-map", "1:a",
-            "-c", "copy",
-            "output.mp4"
+            "final_output.mp4"
           ]);
-
-          const data = await ffmpeg.readFile("output.mp4");
-          if (data instanceof Uint8Array) {
-            finalBlob = new Blob([data as BlobPart], { type: "video/mp4" });
-            console.log("[Studio] FFmpeg audio muxing successful!");
-            audioMuxSuccess = true;
-          } else {
-            throw new Error("FFmpeg returned string data instead of binary array.");
-          }
-        } catch (ffmpegErr) {
-          console.error("[Studio] FFmpeg audio muxing failed, falling back to muted video", ffmpegErr);
-          // Let it fall back to muted video download
+          finalOutputName = "final_output.mp4";
+        } catch (audioErr) {
+          console.warn("[Studio:export] Audio extraction/muxing failed. Using video-only concat segment.", audioErr);
         }
-      }
 
-      const url = URL.createObjectURL(finalBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `snipcaptions-${captionTheme}-${Date.now()}.mp4`;
-      a.target = "_self"; // Fix safe download trigger context on iOS Safari
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-
-      setProgress(1);
-      setStatusMessage("Export complete!");
-
-      if (isMuted) {
-        if (audioMuxSuccess) {
-          setToast({
-            type: "success",
-            message: "Video exported successfully with audio restored via FFmpeg!",
-          });
-        } else {
-          setToast({
-            type: "warning",
-            message: "Video exported without audio due to iOS Safari limits. For sound, use a desktop browser.",
-          });
+        const data = await ffmpeg.readFile(finalOutputName);
+        if (!(data instanceof Uint8Array)) {
+          throw new Error("FFmpeg returned invalid output buffer.");
         }
-      } else {
+
+        // Clean up main-thread MEMFS
+        try { await ffmpeg.deleteFile("concat.txt"); } catch{}
+        try { await ffmpeg.deleteFile("original.mp4"); } catch{}
+        try { await ffmpeg.deleteFile("concatenated.mp4"); } catch{}
+        try { await ffmpeg.deleteFile("audio.aac"); } catch{}
+        try { await ffmpeg.deleteFile("final_output.mp4"); } catch{}
+        for (let i = 0; i < workerCount; i++) {
+          try { await ffmpeg.deleteFile(`chunk_${i}.mp4`); } catch{}
+        }
+
+        const finalBlob = new Blob([data as unknown as BlobPart], { type: "video/mp4" });
+        const url = URL.createObjectURL(finalBlob);
+        
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `snipcaptions-${captionTheme}-${Date.now()}.mp4`;
+        a.target = "_self";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        setProgress(1);
+        setStatusMessage("Export complete!");
         setToast({
           type: "success",
-          message: "Video exported successfully with frame-accurate captions!",
+          message: "Video rendered in parallel and exported successfully!",
         });
+
+      } catch (err) {
+        console.error("[Studio:export] Parallel rendering engine failed, trying fallback...", err);
+        workers.forEach(w => w.terminate());
+        if (workerUrl) URL.revokeObjectURL(workerUrl);
+
+        // Fallback to single-thread render on error
+        setStatusMessage("Parallel engine failed. Falling back to single-threaded render…");
+        await runSingleThreadExport();
+      } finally {
+        setExporting(false);
+        setStatus("ready");
       }
-    } catch (e) {
-      console.error("[Studio] export error", e);
-      setStatusMessage(e instanceof Error ? e.message : "Export failed");
-      setToast({
-        type: "error",
-        message: e instanceof Error ? e.message : "An unexpected error occurred during export.",
-      });
-    } finally {
-      setExporting(false);
-      setStatus("ready");
+    } else {
+      try {
+        console.warn("[Studio:export] Parallel rendering unsupported or missing video file. Falling back to single-threaded renderer.");
+        await runSingleThreadExport();
+      } catch (err) {
+        console.error("[Studio] Fallback export error", err);
+        setStatusMessage(err instanceof Error ? err.message : "Export failed");
+        setToast({
+          type: "error",
+          message: err instanceof Error ? err.message : "An unexpected error occurred during export.",
+        });
+      } finally {
+        setExporting(false);
+        setStatus("ready");
+      }
     }
   };
 
