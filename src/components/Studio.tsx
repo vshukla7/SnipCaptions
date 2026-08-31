@@ -7,7 +7,7 @@ import { CAPTION_THEMES } from "@/lib/types";
 import { CaptionComposition } from "./CaptionComposition";
 import { ExportResolutionModal } from "./ExportResolutionModal";
 
-const FPS = 30;
+const FPS = 30; // 30 FPS Lock
 
 const PRESET_COLORS = [
   "#ffffff",
@@ -1037,8 +1037,14 @@ export function Studio() {
                             <span className="text-[16px] uppercase tracking-wide" style={{ color: accent }}>BROWN</span>
                           </div>
                         )}
+                        {t.id === "minimal_blur_blend" && (
+                          <div className="text-left leading-none space-y-0.5">
+                            <div className="text-[10px] text-white/70" style={{ fontFamily: '"Celosia Nature", cursive' }}>the quick</div>
+                            <div className="text-[16px] font-black uppercase text-white" style={{ fontFamily: '"Helvetica Bold", sans-serif' }}>BROWN</div>
+                          </div>
+                        )}
                         {/* Generic text preview for remaining themes */}
-                        {!ANIMATED_THEMES.has(t.id) && t.id !== "kinetic_01" && t.id !== "black_punch" && t.id !== "liquid_glass" && t.id !== "one_word" && (
+                        {!ANIMATED_THEMES.has(t.id) && t.id !== "kinetic_01" && t.id !== "black_punch" && t.id !== "liquid_glass" && t.id !== "one_word" && t.id !== "minimal_blur_blend" && (
                           <p
                             className="text-[15px] font-extrabold tracking-tight"
                             style={{

@@ -23,6 +23,7 @@ import { DualLineGlowTemplate } from "./templates/DualLineGlowTemplate";
 import { PWEditsTemplate } from "./templates/PWEditsTemplate";
 import { MrBeastTemplate } from "./templates/MrBeastTemplate";
 import { MinimalBlendTemplate } from "./templates/MinimalBlendTemplate";
+import { MinimalBlurBlendTemplate } from "./templates/MinimalBlurBlendTemplate";
 import { PremiereGlowTemplate } from "./templates/PremiereGlowTemplate";
 
 export interface CaptionCompositionProps {
@@ -81,6 +82,7 @@ const FONT_FOR_THEME: Record<CaptionThemeId, string> = {
   pw_edits: '"Montserrat", "Poppins", sans-serif',
   mr_beast: '"Bebas Neue", "Futura-Bold", "Impact", sans-serif',
   minimal_blend: '"Neue Haas Grotesk Display Pro", "Helvetica Neue", "Syne", sans-serif',
+  minimal_blur_blend: '"Celosia Nature", "Helvetica Bold", sans-serif',
   premiere_glow: '"Neue Haas Grotesk Display Pro", "Helvetica Neue", "Syne", sans-serif',
 };
 
@@ -279,6 +281,7 @@ const ActiveCaptionOverlay = React.memo<{
   else if (theme === "pw_edits") captionContent = <PWEditsTemplate {...templateProps} />;
   else if (theme === "mr_beast") captionContent = <MrBeastTemplate {...templateProps} />;
   else if (theme === "minimal_blend") captionContent = <MinimalBlendTemplate {...templateProps} />;
+  else if (theme === "minimal_blur_blend") captionContent = <MinimalBlurBlendTemplate {...templateProps} />;
   else if (theme === "premiere_glow") captionContent = <PremiereGlowTemplate {...templateProps} />;
 
   return (

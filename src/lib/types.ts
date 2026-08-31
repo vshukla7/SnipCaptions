@@ -13,6 +13,7 @@ export type CaptionThemeId =
   | "pw_edits"
   | "mr_beast"
   | "minimal_blend"
+  | "minimal_blur_blend"
   | "premiere_glow";
 
 export interface CaptionPosition {
@@ -54,6 +55,14 @@ export interface CaptionThemeMeta {
 }
 
 export const CAPTION_THEMES: CaptionThemeMeta[] = [
+  {
+    id: "minimal_blur_blend",
+    name: "Minimal Cursive Blur",
+    description: "Celosia Nature script for small text + Helvetica Bold blur-in hero text with customizable accent color.",
+    fontClass: "font-creative",
+    accent: "#2997FF",
+    wordByWord: true,
+  },
   {
     id: "minimal_blend",
     name: "Minimalist Blend",
