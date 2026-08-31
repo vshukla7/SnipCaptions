@@ -73,7 +73,7 @@ export function SetupGuideModal({
                   2. Create API Key
                 </h3>
                 <p className="text-white/40 mt-0.5 text-[12px]">
-                  Click "Create API Key" and copy the key string.
+                  Click &quot;Create API Key&quot; and copy the key string.
                 </p>
               </div>
 
@@ -82,7 +82,7 @@ export function SetupGuideModal({
                   3. Paste & Save Key
                 </h3>
                 <p className="text-white/40 mt-0.5 text-[12px]">
-                  Click "Add API Key" in the top bar and paste your key.
+                  Click &quot;Add API Key&quot; in the top bar and paste your key.
                 </p>
               </div>
             </div>

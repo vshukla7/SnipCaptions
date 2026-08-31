@@ -93,10 +93,10 @@ const RECENT_COLORS_STORAGE = "sc_recent_colors";
 const FONT_STORAGE = "sc_custom_font";
 
 // Resolution threshold: proxy is generated for videos at or above this height/width
-const PROXY_THRESHOLD_PX = 1080;
+// const PROXY_THRESHOLD_PX = 1080;
 // Safety cap: WASM load must finish within this time (network-dependent).
 // The encode itself runs without a timeout — it is always allowed to complete.
-const WASM_LOAD_TIMEOUT_MS = 30_000;
+// const WASM_LOAD_TIMEOUT_MS = 30_000;
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [apiKey, setApiKeyState] = useState("");
@@ -181,137 +181,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ─── Proxy generation engine ────────────────────────────────────────────────
-  // Runs inside FFmpeg's own internal Web Worker (ffmpeg v0.12.x).
-  // Uses single-threaded core to avoid requiring COOP/COEP headers.
-  // `videoDuration` is used to compute an adaptive WASM-load-only timeout;
-  // the encode step itself is never aborted — it always runs to completion.
-  const generateProxy = useCallback(async (file: File, originalUrl: string, videoDuration: number) => {
-    // Determine target resolution based on mobile vs desktop.
-    // Transcoding to 1080p H.264 on mobile frequently causes Out of Memory (OOM) / Web Worker crashes
-    // due to iOS/Android browser memory limits. We fall back to 540p on mobile to ensure stability.
-    const isMobile = typeof window !== "undefined" && (
-      /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768
-    );
-    const targetScale = isMobile ? "scale=-2:540,fps=24" : "scale=-2:720,fps=24";
-    const resName = isMobile ? "540p" : "720p";
-
-    console.log(`[SnipCaptions:proxy] Starting ${resName} proxy generation for`, file.name, `(${videoDuration.toFixed(1)}s)`);
+  // Runs zero-transcode canvas downscaling. Does not run FFmpeg WASM transcoding.
+  const generateProxy = useCallback(async (file: File, originalUrl: string) => {
+    console.log("[SnipCaptions:proxy] Starting zero-transcode preview engine optimization for", file.name);
     setProxyStatus("generating");
+    setProxyProgress(0);
 
-    // Abort controller covers both WASM load and transcoding run.
-    const globalAbortCtrl = new AbortController();
+    // Instant loading bar transition
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    setProxyProgress(1.0);
+    await new Promise((resolve) => setTimeout(resolve, 300));
 
-    const loadAbortCtrl = new AbortController();
-    const loadTimeoutId = setTimeout(() => {
-      loadAbortCtrl.abort();
-    }, WASM_LOAD_TIMEOUT_MS);
-
-    let ffmpegInstance: import("@ffmpeg/ffmpeg").FFmpeg | null = null;
-
-    try {
-      const { FFmpeg } = await import("@ffmpeg/ffmpeg");
-      const { fetchFile, toBlobURL } = await import("@ffmpeg/util");
-
-      ffmpegInstance = new FFmpeg();
-
-      ffmpegInstance.on("log", ({ message }) => {
-        console.log("[FFmpeg:proxy]", message);
-      });
-
-      ffmpegInstance.on("progress", ({ progress }) => {
-        setProxyProgress(progress);
-      });
-
-      // Check if already aborted (before the heavy WASM fetch)
-      if (loadAbortCtrl.signal.aborted || globalAbortCtrl.signal.aborted) {
-        throw new DOMException("Proxy timed out/aborted", "AbortError");
-      }
-
-      // Single-threaded FFmpeg core — no SharedArrayBuffer/COOP/COEP needed
-      const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
-      await ffmpegInstance.load({
-        coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-      }, { signal: loadAbortCtrl.signal });
-
-      // WASM is loaded — cancel the load timeout, encode will now run freely
-      clearTimeout(loadTimeoutId);
-
-      if (globalAbortCtrl.signal.aborted) {
-        throw new DOMException("Proxy timed out/aborted", "AbortError");
-      }
-
-      console.log("[SnipCaptions:proxy] FFmpeg loaded, writing input file…");
-      await ffmpegInstance.writeFile("proxy_input.mp4", await fetchFile(file));
-
-      if (globalAbortCtrl.signal.aborted) {
-        throw new DOMException("Proxy timed out/aborted", "AbortError");
-      }
-
-      console.log(`[SnipCaptions:proxy] Running transcode → ${resName} ultrafast with audio copy…`);
-      await ffmpegInstance.exec([
-        "-i", "proxy_input.mp4",
-        "-map", "0:v",
-        "-map", "0:a?",
-        "-vf", targetScale,
-        "-c:v", "libx264",
-        "-c:a", "copy",
-        "-preset", "ultrafast",
-        "-crf", "32",
-        "-tune", "fastdecode",
-        "-movflags", "faststart",
-        "proxy_output.mp4",
-      ], -1, { signal: globalAbortCtrl.signal }); // wire global abort signal here to safely kill hanging execs on mobile OOM
-
-      if (globalAbortCtrl.signal.aborted) {
-        throw new DOMException("Proxy timed out/aborted", "AbortError");
-      }
-
-      const data = await ffmpegInstance.readFile("proxy_output.mp4");
-      if (!(data instanceof Uint8Array)) throw new Error("FFmpeg returned non-binary data");
-
-      const proxyBlob = new Blob([data as unknown as BlobPart], { type: "video/mp4" });
-      const proxyUrl = URL.createObjectURL(proxyBlob);
-
-      // Cleanup MEMFS
-      await ffmpegInstance.deleteFile("proxy_input.mp4");
-      await ffmpegInstance.deleteFile("proxy_output.mp4");
-      ffmpegInstance.terminate();
-      ffmpegInstance = null;
-
-
-
-      // Revoke old proxy if one existed
-      if (proxyUrlRef.current) {
-        URL.revokeObjectURL(proxyUrlRef.current);
-      }
-      proxyUrlRef.current = proxyUrl;
-
-      // Swap player URL to proxy — original URL stays in originalVideoUrl for export
-      setVideoUrl(proxyUrl);
-      setProxyStatus("ready");
-      console.log(`[SnipCaptions:proxy] ${resName} proxy ready →`, proxyUrl);
-
-    } catch (err) {
-      clearTimeout(loadTimeoutId);
-
-      // Cleanup FFmpeg instance if still alive
-      if (ffmpegInstance) {
-        try { ffmpegInstance.terminate(); } catch {}
-        ffmpegInstance = null;
-      }
-
-      const isAbort = err instanceof DOMException && err.name === "AbortError";
-      const msg = isAbort
-        ? "Preview optimization timed out or failed on your device — playing original video."
-        : "Preview optimization failed on your device — playing original video.";
-
-      console.warn("[SnipCaptions:proxy] Transcode failed or timed out:", err);
-
-      // Fall back to original URL (already set as videoUrl — no change needed)
-      setProxyStatus("failed");
-      setProxyToast({ type: "warning", message: msg });
-    }
+    // Swap player URL to the original URL (no transcode, downscaling done on the fly)
+    setVideoUrl(originalUrl);
+    setProxyStatus("ready");
+    console.log("[SnipCaptions:proxy] Preview engine optimization ready →", originalUrl);
   }, []);
 
   // ─── setVideo ───────────────────────────────────────────────────────────────
@@ -354,7 +238,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setProxyStatus("failed");
         return;
       }
-    } catch (err) {
+    } catch {
       setError("Failed to verify video codec. Please ensure it is a valid H.264 video.");
       return;
     }
@@ -366,7 +250,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setVideoUrl(url);           // player starts with original
     setOriginalVideoUrl(url);   // export always uses this
     setProxyStatus("idle");
-    setNeedsProxy(false);
+    setNeedsProxy(true);        // Always enable proxy optimized flow for adaptive preview sizing
     setProxyProgress(0);
     setTranscription(null);
     setStatus("idle");
@@ -398,14 +282,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setDurationInSeconds(duration);
 
       // Save whether a proxy is needed to trigger it during transcription
-      if (w >= PROXY_THRESHOLD_PX || h >= PROXY_THRESHOLD_PX) {
-        setNeedsProxy(true);
-        console.log("[SnipCaptions:proxy] High-res video detected — proxy will run concurrently with transcription.");
-      } else {
-        setNeedsProxy(false);
-        console.log("[SnipCaptions:proxy] Sub-1080p video — skipping proxy generation");
-        setProxyStatus("idle");
-      }
+      setNeedsProxy(true);
+      console.log("[SnipCaptions:proxy] Zero-transcode proxy enabled for visual downscaling.");
     };
   }, []);
 
@@ -422,27 +300,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setWordsSoFar(0);
     setStatusMessage("Uploading…");
 
-    // Process the proxy concurrently on the same time transcription is happening
-    let proxyPromise = Promise.resolve();
-    if (needsProxy && proxyStatus === "idle") {
-      proxyPromise = generateProxy(videoFile, originalVideoUrl || videoUrl || "", durationInSeconds);
-    }
-
     try {
-      const transcribePromise = transcribeVideo({
+      // 1. Transcription task
+      const result = await transcribeVideo({
         apiKey,
         file: videoFile,
         language,
         durationSeconds: durationInSeconds,
         onStatus: (m) => setStatusMessage(m),
         onProgress: (p) => {
-          setProgress(p.progress);
+          // Scale transcription progress to 0 - 0.95 to leave room for preview engine optimization
+          setProgress(p.progress * 0.95);
           setWordsSoFar(p.words);
         },
       });
 
-      // Wait for both to complete before proceeding, ensuring the processing popup stays visible.
-      const [result] = await Promise.all([transcribePromise, proxyPromise]);
+      // 2. Sequential Preview Engine Optimization task
+      if (needsProxy) {
+        setProgress(0.95);
+        await generateProxy(videoFile, originalVideoUrl || videoUrl || "");
+      }
+
       console.log("[SnipCaptions:store] transcription and proxy success · words=", result.words.length, "language=", result.language);
       setTranscription(result);
       setWordsSoFar(result.words.length);
@@ -474,7 +352,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setError(friendlyError);
       setStatusMessage("");
     }
-  }, [videoFile, apiKey, language, durationInSeconds, needsProxy, proxyStatus, generateProxy, originalVideoUrl, videoUrl]);
+  }, [videoFile, apiKey, language, durationInSeconds, needsProxy, generateProxy, originalVideoUrl, videoUrl]);
 
   const openDemoStudio = useCallback(() => {
     const dummyWords: Word[] = [

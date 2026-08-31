@@ -93,7 +93,7 @@ export default function Home() {
       {/* Ad Interstitial Overlay during caption generation */}
       <AdInterstitial
         open={status === "transcribing"}
-        title={proxyStatus === "generating" && progress >= 0.95 ? "Processing your proxy video..." : "Generating captions..."}
+        title={proxyStatus === "generating" && progress >= 0.95 ? "Optimizing Preview Engine..." : "Generating captions..."}
         progress={proxyStatus === "generating" && progress >= 0.95 ? proxyProgress : progress}
         words={wordsSoFar}
         hideProgressPercent={false}

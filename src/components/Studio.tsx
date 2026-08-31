@@ -349,7 +349,6 @@ export function Studio() {
     customFontFamily,
     setCustomFontFamily,
     durationInSeconds: storeDuration,
-    status,
     progress,
     setStatus,
     setProgress,
@@ -394,7 +393,6 @@ export function Studio() {
 
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<PlayerRef>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
   const padRef = useRef<HTMLDivElement | null>(null);
 
   const handlePadPointer = (clientX: number, clientY: number) => {
@@ -440,25 +438,7 @@ export function Studio() {
     padWidth = Math.round(220 * padAspect);
   }
 
-  // Monitor play/pause status of the Remotion Player
-  useEffect(() => {
-    const player = playerRef.current;
-    if (!player) return;
 
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
-
-    player.addEventListener("play", onPlay);
-    player.addEventListener("pause", onPause);
-
-    // Sync initial state
-    setIsPlaying(player.isPlaying());
-
-    return () => {
-      player.removeEventListener("play", onPlay);
-      player.removeEventListener("pause", onPause);
-    };
-  }, [videoUrl]);
 
   const [playerDims, setPlayerDims] = useState<{ width: number; height: number }>({
     width: 0,
@@ -496,13 +476,31 @@ export function Studio() {
 
   const { width: renderWidth, height: renderHeight } = getRenderDimensions();
 
-  // Dynamic preview resolution scaling for Player to prevent lagging on mobile/desktop
-  // Keep max preview dimension to 640px to ensure fluid playback and zero frame-drop issues
-  const maxPreviewDimension = 640;
-  const currentMax = Math.max(compWidth, compHeight);
-  const previewScale = currentMax > maxPreviewDimension ? maxPreviewDimension / currentMax : 1.0;
-  const previewWidth = Math.round((compWidth * previewScale) / 2) * 2;
-  const previewHeight = Math.round((compHeight * previewScale) / 2) * 2;
+  // Dynamic preview resolution scaling for Player (Zero-Transcode Canvas Downscaling)
+  // Target 720p for Desktop/PC devices, 480p for Mobile viewports, maintaining aspect ratio.
+  const getAdaptivePreviewDimensions = () => {
+    const isMobileDevice = typeof window !== "undefined" && (
+      /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768
+    );
+    const targetShort = isMobileDevice ? 480 : 720;
+    const aspect = naturalAspect || (compWidth / compHeight);
+
+    let w = 1080;
+    let h = 1920;
+
+    if (aspect > 1) {
+      // Landscape: height is the target short side
+      h = targetShort;
+      w = Math.round((targetShort * aspect) / 2) * 2;
+    } else {
+      // Portrait / Square: width is the target short side
+      w = targetShort;
+      h = Math.round((targetShort / aspect) / 2) * 2;
+    }
+    return { width: w, height: h };
+  };
+
+  const { width: previewWidth, height: previewHeight } = getAdaptivePreviewDimensions();
 
   // Auto detect natural aspect ratio when video URL is present with iOS compatibility
   useEffect(() => {
@@ -677,7 +675,7 @@ export function Studio() {
 
           const data = await ffmpeg.readFile("output.mp4");
           if (data instanceof Uint8Array) {
-            finalBlob = new Blob([data as any], { type: "video/mp4" });
+            finalBlob = new Blob([data as BlobPart], { type: "video/mp4" });
             console.log("[Studio] FFmpeg audio muxing successful!");
             audioMuxSuccess = true;
           } else {
@@ -846,7 +844,7 @@ export function Studio() {
                   <line x1="12" y1="16" x2="12" y2="12" />
                   <line x1="12" y1="8" x2="12.01" y2="8" />
                 </svg>
-                <span>Don't worry, the final exported video will not lag!</span>
+                <span>Don&apos;t worry, the final exported video will not lag!</span>
               </div>
             </div>
           )}
@@ -872,6 +870,8 @@ export function Studio() {
                   style={{
                     width: "100%",
                     height: "100%",
+                    transform: "translateZ(0)",
+                    willChange: "transform",
                   }}
                   acknowledgeRemotionLicense
                 />

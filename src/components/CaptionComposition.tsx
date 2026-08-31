@@ -191,7 +191,13 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
         {Boolean(src && src.trim()) ? (
           <Video
             src={src}
-            style={{ width: "100%", height: "100%", objectFit: "contain" }}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              transform: "translateZ(0)",
+              willChange: "transform",
+            }}
             muted={mutedVideo}
           />
         ) : (
@@ -241,7 +247,13 @@ export const CaptionComposition: React.FC<CaptionCompositionProps> = ({
       {Boolean(src && src.trim()) ? (
         <Video
           src={src}
-          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "contain",
+            transform: "translateZ(0)",
+            willChange: "transform",
+          }}
           muted={mutedVideo}
         />
       ) : (
