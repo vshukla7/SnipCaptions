@@ -74,6 +74,13 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Instrument+Serif:ital@0;1&family=Outfit:wght@400;500;600;700;800;900&family=Playfair+Display:wght@400;600;700;800;900&family=Bebas+Neue&family=Poppins:wght@400;500;600;700;800&family=Anton&family=Archivo+Black&family=Dancing+Script:wght@500;700&display=swap"
           rel="stylesheet"
         />
+        {process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID && (
+          <script
+            async
+            src={`https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID}`}
+            crossOrigin="anonymous"
+          />
+        )}
       </head>
       <body className="font-ui antialiased">
         <Providers>{children}</Providers>

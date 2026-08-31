@@ -85,6 +85,8 @@ export default function Home() {
     >
       <Header />
 
+
+
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd) }}
@@ -97,6 +99,7 @@ export default function Home() {
         progress={proxyStatus === "generating" && progress >= 0.95 ? proxyProgress : progress}
         words={wordsSoFar}
         hideProgressPercent={false}
+        adType="transcribing"
       />
 
       {/* Ad Interstitial Overlay during video export */}
@@ -104,6 +107,7 @@ export default function Home() {
         open={status === "exporting"}
         title={statusMessage || "Rendering video..."}
         progress={progress}
+        adType="exporting"
       />
 
       <main className="flex-1 overflow-y-auto flex flex-col">
@@ -178,13 +182,6 @@ export default function Home() {
           </motion.div>
         )}
       </main>
-
-      {/* Persistent Sticky Bottom Banner Space */}
-      <footer className="sticky bottom-0 z-30 h-13 shrink-0 border-t border-white/[0.06] bg-[#121214]/95 backdrop-blur-xl flex items-center justify-center px-4 py-1">
-        <div className="w-full max-w-5xl">
-          <AdBanner variant="small" label="Bottom Sponsor Banner" />
-        </div>
-      </footer>
 
       <TutorialVideoModal
         open={isTutorialOpen}
