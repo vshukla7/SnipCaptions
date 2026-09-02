@@ -47,6 +47,14 @@ export const metadata: Metadata = {
     follow: true,
     googleBot: { index: true, follow: true },
   },
+  icons: {
+    icon: [
+      { url: "/snipCaptions.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    shortcut: "/snipCaptions.svg",
+    apple: "/snipCaptions.svg",
+  },
 };
 
 export const viewport: Viewport = {

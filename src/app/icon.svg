@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Deep Apple Matte Dark Background -->
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" stop-color="#14161D"/>
+      <stop offset="100%" stop-color="#080A0E"/>
+    </radialGradient>
+
+    <!-- Apple Vibrant Electric Blue (Active Highlighted Word) -->
+    <linearGradient id="appleBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2997FF"/>
+      <stop offset="100%" stop-color="#0066CC"/>
+    </linearGradient>
+
+    <!-- Metallic Crisp White (Secondary High-Contrast Element) -->
+    <linearGradient id="pureWhite" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E5E5EA"/>
+    </linearGradient>
+
+    <!-- Soft Glow Filter for Highlighted Active Pill -->
+    <filter id="activeGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#0066FF" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <!-- Background Base Container -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGlow)"/>
+
+  <!-- 2x2 Caption Grid (Matching Image Reference Layout) -->
+  <g transform="translate(0, 0)">
+    
+    <!-- TOP LEFT: Active Highlighted Caption Pill (Apple Blue) -->
+    <rect x="110" y="180" width="160" height="68" rx="34" fill="url(#appleBlue)" filter="url(#activeGlow)"/>
+
+    <!-- TOP RIGHT: Small Active Dot / Subtitle Marker (Crisp White) -->
+    <circle cx="362" cy="214" r="34" fill="url(#pureWhite)"/>
+
+    <!-- BOTTOM LEFT: Inactive Word Circle (Subtle Dark Grey) -->
+    <circle cx="180" cy="328" r="34" fill="#3A3D4A"/>
+
+    <!-- BOTTOM RIGHT: Inactive Caption Segment Pill (Crisp White) -->
+    <rect x="242" y="294" width="160" height="68" rx="34" fill="url(#pureWhite)"/>
+
+  </g>
+</svg>
