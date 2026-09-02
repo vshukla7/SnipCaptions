@@ -83,11 +83,9 @@ export const MinimalBlurBlendTemplate: React.FC<TemplateProps> = React.memo(({
           extrapolateRight: "clamp",
         });
 
-        const filter = isPlaying
-          ? "none"
-          : isBig
-          ? `blur(${blurAmount}px) drop-shadow(0px 4px 14px ${heroColor}88) drop-shadow(0px 4px 12px rgba(0,0,0,0.6))`
-          : "drop-shadow(0px 2px 8px rgba(0,0,0,0.5))";
+        const filter = isBig && blurAmount > 0.8
+          ? `blur(${Math.round(blurAmount * 10) / 10}px)`
+          : "none";
 
         return (
           <span

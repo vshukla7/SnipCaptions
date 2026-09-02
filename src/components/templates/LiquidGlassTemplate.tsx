@@ -35,14 +35,8 @@ export const LiquidGlassTemplate: React.FC<TemplateProps> = React.memo(({
   const pillOpacity = interpolate(pillSpring, [0, 1], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const pillY       = interpolate(pillSpring, [0, 1], [22, 0],  { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
-  // Disable heavy real-time CSS backdrop blur & box shadows during active playback
-  const backdropStyle = isPlaying
-    ? "none"
-    : "blur(20px) saturate(180%)";
-
-  const boxStyle = isPlaying
-    ? "0 4px 12px rgba(0,0,0,0.5)"
-    : "0 8px 32px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.2)";
+  // Hardware-accelerated glass style without CPU backdrop-blur overhead
+  const boxStyle = "0 4px 20px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.2)";
 
   return (
     <div
@@ -58,8 +52,8 @@ export const LiquidGlassTemplate: React.FC<TemplateProps> = React.memo(({
           fontSize: fontSize * 0.76,
           textAlign: "center",
           // Multi-layer glass effect
-          background: isPlaying ? "rgba(20,20,25,0.85)" : "linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.06) 100%)",
-          border: "1px solid rgba(255,255,255,0.28)",
+          background: "linear-gradient(135deg, rgba(30,30,40,0.85) 0%, rgba(15,15,22,0.80) 100%)",
+          border: "1px solid rgba(255,255,255,0.22)",
           borderRadius: "100px",
           padding: "10px 28px",
           display: "inline-flex",
@@ -67,8 +61,6 @@ export const LiquidGlassTemplate: React.FC<TemplateProps> = React.memo(({
           justifyContent: "center",
           alignItems: "center",
           boxShadow: boxStyle,
-          backdropFilter: backdropStyle,
-          WebkitBackdropFilter: backdropStyle,
           maxWidth: width * 0.88,
           flexWrap: "wrap",
         }}

@@ -1,11 +1,11 @@
 import React, { useMemo } from "react";
 import {
   AbsoluteFill,
+  OffthreadVideo,
   useCurrentFrame,
   useVideoConfig,
   Internals,
 } from "remotion";
-import { Video } from "@remotion/media";
 import type { CaptionPosition, CaptionThemeId, Word } from "@/lib/types";
 
 // Import separate template components
@@ -113,7 +113,7 @@ const MemoizedVideo = React.memo<{ src: string; muted: boolean }>(({ src, muted 
   }
 
   return (
-    <Video
+    <OffthreadVideo
       src={src}
       style={{
         width: "100%",
@@ -121,9 +121,9 @@ const MemoizedVideo = React.memo<{ src: string; muted: boolean }>(({ src, muted 
         objectFit: "contain",
         transform: "translate3d(0, 0, 0)",
         willChange: "transform",
-        imageRendering: "pixelated",
       }}
       muted={muted}
+      pauseWhenBuffering
     />
   );
 });

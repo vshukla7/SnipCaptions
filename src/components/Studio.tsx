@@ -5,7 +5,7 @@ import { Player, PlayerRef } from "@remotion/player";
 import { useApp } from "@/lib/store";
 import { CAPTION_THEMES } from "@/lib/types";
 import { CaptionComposition } from "./CaptionComposition";
-import { ExportResolutionModal } from "./ExportResolutionModal";
+import { ExportResolutionModal, ExportPreset } from "./ExportResolutionModal";
 
 const FPS = 30; // 30 FPS Lock
 
@@ -535,7 +535,7 @@ export function Studio() {
     return () => observer.disconnect();
   }, [naturalAspect]);
 
-  const handleExport = async () => {
+  const handleExport = async (preset: ExportPreset = "1080p") => {
     if (!ready) return;
 
     if (playerRef.current) {
@@ -547,11 +547,25 @@ export function Studio() {
     setProgress(0);
     setStatusMessage("Initializing rendering engine…");
 
-    const aspectW = renderWidth;
-    const aspectH = renderHeight;
+    const aspect = naturalAspect || (originalWidth > 0 && originalHeight > 0 ? originalWidth / originalHeight : 9 / 16);
+    const isLandscape = aspect > 1;
+
+    let aspectW = renderWidth;
+    let aspectH = renderHeight;
+
+    if (preset !== "original") {
+      const shortSide = preset === "1080p" ? 1080 : preset === "720p" ? 720 : 540;
+      if (isLandscape) {
+        aspectH = shortSide;
+        aspectW = Math.round((shortSide * aspect) / 2) * 2;
+      } else {
+        aspectW = shortSide;
+        aspectH = Math.round((shortSide / aspect) / 2) * 2;
+      }
+    }
 
     try {
-      console.log("[Studio:export] Starting hardware-accelerated client-side video export...");
+      console.log(`[Studio:export] Starting hardware-accelerated video export (${preset} preset: ${aspectW}x${aspectH})...`);
       
       const { renderMediaOnWeb, canRenderMediaOnWeb } = await import("@remotion/web-renderer");
       const controller = new AbortController();
@@ -600,8 +614,12 @@ export function Studio() {
 
       setStatusMessage("Rendering frames (GPU accelerated)…");
 
-      // 2. Perform client-side video rendering with maximum performance flags
+      // 2. Perform ultra-fast client-side rendering with JPEG encoding and parallel worker concurrency
       const exportSrc = originalVideoUrl || videoUrl || "";
+      const concurrency = typeof navigator !== "undefined" && navigator.hardwareConcurrency
+        ? Math.min(navigator.hardwareConcurrency, 8)
+        : 4;
+
       const { getBlob } = await renderMediaOnWeb({
         composition: {
           id: "snipcaptions",
@@ -624,7 +642,8 @@ export function Studio() {
         container: "mp4",
         videoBitrate: "medium",
         audioBitrate: "medium",
-        hardwareAcceleration: "prefer-hardware", // Enforce GPU hardware acceleration for ultra-fast renders
+        hardwareAcceleration: "prefer-hardware",
+        mediaCacheSizeInBytes: 512 * 1024 * 1024,
         muted: isMuted,
         delayRenderTimeoutInMilliseconds: 80000,
         signal: controller.signal,
@@ -874,6 +893,7 @@ export function Studio() {
                     width: "100%",
                     height: "100%",
                     transform: "translate3d(0, 0, 0)",
+                    backfaceVisibility: "hidden",
                     willChange: "transform",
                   }}
                   acknowledgeRemotionLicense

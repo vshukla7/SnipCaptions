@@ -172,7 +172,7 @@ export const SnipcapSpecialTemplate: React.FC<TemplateProps> = React.memo(({
               : `0 0 18px ${accentColor || "#30d158"}55, 0 3px 14px rgba(0,0,0,0.75)`,
             transform: `scale(${heroScale})`,
             opacity: heroOpacity,
-            filter: isPlaying ? "none" : `blur(${heroBlur}px)`,
+            filter: heroBlur > 0.8 ? `blur(${Math.round(heroBlur * 10) / 10}px)` : "none",
             willChange: "transform, opacity",
             lineHeight: 1.0,
           }}
