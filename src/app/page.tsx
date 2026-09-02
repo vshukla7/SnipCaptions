@@ -129,7 +129,7 @@ export default function Home() {
             </div>
 
             {/* Single Clean Main Card */}
-            <div className="relative z-30 flex flex-col gap-4 rounded-2xl border border-white/[0.08] bg-[#141416] p-5 shadow-xl">
+            <div className="relative z-30 flex flex-col gap-4 rounded-2xl bg-[#141416] p-5 shadow-xl">
               <DragDropUpload />
 
               <LanguageSelector />

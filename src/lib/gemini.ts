@@ -51,17 +51,69 @@ CRITICAL SCRIPT RULE: Transcribe ALL words using Latin/English characters (Hingl
     langInstruction = `Language preference: Urdu (اردو script). Transcribe in native Urdu script.`;
   }
 
-  return `You are a speech-to-text engine for short-form video.
-Transcribe ALL spoken audio from the provided media file.
+  return `You are a professional high-precision speech-to-text alignment engine for video captions.
+Transcribe EVERY spoken word from the audio with ultra-accurate frame-accurate word-level timestamps.
 ${langInstruction}
 
-Requirements:
-- Return word-level timestamps in SECONDS with at least 2 decimals.
-- "start" and "end" mark when each word is spoken.
-- Keep punctuation attached to the correct word (e.g. "word,").
-- If multiple speakers, still list every word in order.
-- Output ONLY the JSON object described by the schema. Do not wrap it in markdown.`;
+STRICT ACCURACY RULES:
+- Transcribe ALL spoken words in sequential order without skipping any words, numbers, or exclamations.
+- "start": exact time (in seconds with 2-3 decimals) when the speaker begins saying the word.
+- "end": exact time (in seconds with 2-3 decimals) when the speaker finishes saying the word.
+- "start" of a word MUST be >= "start" of the previous word.
+- Keep punctuation attached to words naturally (e.g., "Hello,", "world!").
+- Do NOT hallucinate words that are not spoken in the audio.
+- Output ONLY the JSON object conforming to the schema.`;
 };
+
+function alignAndCleanTimestamps(words: Word[], durationSeconds?: number): Word[] {
+  if (!words || words.length === 0) return [];
+
+  // 1. Sort strictly by start time
+  const sorted = [...words].sort((a, b) => Number(a.start) - Number(b.start));
+
+  const cleaned: Word[] = [];
+  const minDuration = 0.16; // Minimum word duration in seconds (160ms) to ensure clear caption visibility
+
+  for (let i = 0; i < sorted.length; i++) {
+    const item = sorted[i];
+    if (!item.word || !item.word.trim()) continue;
+
+    let start = Math.max(0, Number(item.start) || 0);
+    let end = Math.max(start + minDuration, Number(item.end) || start + minDuration);
+
+    // Round to 3 decimal places
+    start = Math.round(start * 1000) / 1000;
+    end = Math.round(end * 1000) / 1000;
+
+    // Fix overlap with previous word
+    if (cleaned.length > 0) {
+      const prev = cleaned[cleaned.length - 1];
+      if (start < prev.start) {
+        start = prev.start;
+      }
+      if (prev.end > start) {
+        // Adjust previous word's end to avoid subtitle overlap jitter
+        prev.end = Math.max(prev.start + minDuration, start);
+      }
+    }
+
+    if (end <= start) {
+      end = start + minDuration;
+    }
+
+    if (durationSeconds && durationSeconds > 0 && end > durationSeconds) {
+      end = Math.max(start + minDuration, durationSeconds);
+    }
+
+    cleaned.push({
+      word: item.word.trim(),
+      start,
+      end,
+    });
+  }
+
+  return cleaned;
+}
 
 export async function validateApiKey(apiKey: string): Promise<boolean> {
   try {
@@ -117,7 +169,7 @@ export async function transcribeVideo({
     const config: GenerateContentConfig = {
       responseMimeType: "application/json",
       responseSchema: TRANSCRIPTION_SCHEMA,
-      temperature: 0.1,
+      temperature: 0.0, // Zero temperature for maximum deterministic audio alignment precision
     };
 
     onStatus?.("Processing audio…");
@@ -161,12 +213,14 @@ export async function transcribeVideo({
       );
     }
 
-    onProgress?.({ progress: 1, words: parsed.words.length });
+    const alignedWords = alignAndCleanTimestamps(parsed.words, durationSeconds);
+
+    onProgress?.({ progress: 1, words: alignedWords.length });
 
     return {
       language: parsed.language ?? language,
       text: parsed.text ?? "",
-      words: parsed.words,
+      words: alignedWords,
     };
   } finally {
     try {
