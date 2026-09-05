@@ -23,6 +23,11 @@ import { validateVideoContainerAndCodec } from "./utils";
 // ─── Proxy status ──────────────────────────────────────────────────────────────
 export type ProxyStatus = "idle" | "generating" | "ready" | "failed";
 
+export interface StudioActions {
+  onDownloadSRT: () => void;
+  onExport: () => void;
+}
+
 interface AppContextValue {
   apiKey: string;
   setApiKey: (k: string) => void;
@@ -79,6 +84,8 @@ interface AppContextValue {
   setStatusMessage: (m: string) => void;
   setProgress: (p: number) => void;
   setStatus: (s: AppStatus) => void;
+  studioActions: StudioActions | null;
+  setStudioActions: (actions: StudioActions | null) => void;
 }
 
 const AppContext = createContext<AppContextValue | null>(null);
@@ -123,6 +130,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [wordsSoFar, setWordsSoFar] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [durationInSeconds, setDurationInSeconds] = useState(0);
+  const [studioActions, setStudioActions] = useState<StudioActions | null>(null);
 
   // Track blob URLs for cleanup
   const originalUrlRef = useRef<string | null>(null);
@@ -226,6 +234,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     setError(null);
     setStatus("idle");
+
+    if (f.size > 100 * 1024 * 1024) {
+      setError("This video is not supported on your browser or device. The maximum supported video size is 100 MB.");
+      setVideoFile(null);
+      setVideoUrl(null);
+      setOriginalVideoUrl(null);
+      setProxyStatus("failed");
+      return;
+    }
+
     try {
       const validation = await validateVideoContainerAndCodec(f);
       if (!validation.supported) {
@@ -242,6 +260,52 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
 
     const url = URL.createObjectURL(f);
+
+    let metadata: { duration: number; width: number; height: number };
+    try {
+      metadata = await new Promise((resolve, reject) => {
+        const probe = document.createElement("video");
+        probe.preload = "metadata";
+        probe.muted = true;
+        probe.onloadedmetadata = () => {
+          resolve({
+            duration: probe.duration || 0,
+            width: probe.videoWidth,
+            height: probe.videoHeight,
+          });
+        };
+        probe.onerror = () => reject(new Error("Video metadata could not be decoded."));
+        probe.src = url;
+        probe.load();
+      });
+    } catch {
+      URL.revokeObjectURL(url);
+      setError("This video is not supported on your browser or device. Please use a browser-compatible MP4 video.");
+      setVideoFile(null);
+      setVideoUrl(null);
+      setOriginalVideoUrl(null);
+      setProxyStatus("failed");
+      return;
+    }
+
+    const device = navigator as Navigator & { deviceMemory?: number };
+    const isPhone = /Android|iPhone|iPad|iPod|Windows Phone/i.test(navigator.userAgent) || window.innerWidth < 768;
+    const isLowEndDevice = (device.deviceMemory ?? Infinity) <= 4 || device.hardwareConcurrency <= 4;
+    const maxSupportedDimension = isPhone || isLowEndDevice ? 1920 : Infinity;
+    const videoMaxDimension = Math.max(metadata.width, metadata.height);
+
+    if (videoMaxDimension > maxSupportedDimension) {
+      URL.revokeObjectURL(url);
+      setError(
+        `This video resolution is not supported on your browser or device. ${isPhone || isLowEndDevice ? "Phones and low-end devices support up to 1080p (1920px maximum)." : "Please use a supported video resolution."}`,
+      );
+      setVideoFile(null);
+      setVideoUrl(null);
+      setOriginalVideoUrl(null);
+      setProxyStatus("failed");
+      return;
+    }
+
     originalUrlRef.current = url;
 
     setVideoFile(f);
@@ -261,28 +325,18 @@ export function AppProvider({ children }: { children: ReactNode }) {
       "url=", url,
     );
 
-    // Probe duration and resolution to decide whether to generate a proxy
-    const probe = document.createElement("video");
-    probe.preload = "metadata";
-    probe.src = url;
-    probe.onloadedmetadata = () => {
-      const duration = probe.duration || 0;
-      const w = probe.videoWidth;
-      const h = probe.videoHeight;
+    setOriginalWidth(metadata.width);
+    setOriginalHeight(metadata.height);
+    setDurationInSeconds(metadata.duration);
 
-      setOriginalWidth(w);
-      setOriginalHeight(h);
+    console.log(
+      "[SnipCaptions:store] video metadata · duration=", metadata.duration,
+      "· resolution=", `${metadata.width}x${metadata.height}`,
+    );
 
-      console.log(
-        "[SnipCaptions:store] video metadata · duration=", duration,
-        "· resolution=", `${w}x${h}`,
-      );
-      setDurationInSeconds(duration);
-
-      // Save whether a proxy is needed to trigger it during transcription
-      setNeedsProxy(true);
-      console.log("[SnipCaptions:proxy] Zero-transcode proxy enabled for visual downscaling.");
-    };
+    // Save whether a proxy is needed to trigger it during transcription
+    setNeedsProxy(true);
+    console.log("[SnipCaptions:proxy] Zero-transcode proxy enabled for visual downscaling.");
   }, []);
 
   const transcribe = useCallback(async () => {
@@ -444,6 +498,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setStatusMessage,
     setProgress,
     setStatus,
+    studioActions,
+    setStudioActions,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

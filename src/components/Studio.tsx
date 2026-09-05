@@ -4,7 +4,6 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { PixiPlayer, PixiPlayerRef } from "./PixiPlayer";
 import { useApp } from "@/lib/store";
 import { CAPTION_THEMES } from "@/lib/types";
-import { ExportResolutionModal, ExportPreset } from "./ExportResolutionModal";
 import { exportVideoWithWebCodecs } from "@/lib/exportEngine";
 
 const FPS = 30; // 30 FPS Lock
@@ -555,6 +554,7 @@ export function Studio() {
     setStatusMessage,
     setCaptionTheme,
     updateWord,
+    setStudioActions,
   } = useApp();
 
   // Use uploaded words/duration or fallback dummy data for live preview
@@ -564,7 +564,6 @@ export function Studio() {
   const [exporting, setExporting] = useState(false);
   const [naturalAspect, setNaturalAspect] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"templates" | "settings" | "transcript">("templates");
-  const [showExportModal, setShowExportModal] = useState(false);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
 
@@ -593,6 +592,8 @@ export function Studio() {
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
   const playerRef = useRef<PixiPlayerRef>(null);
   const padRef = useRef<HTMLDivElement | null>(null);
+  const downloadSRTRef = useRef<() => void>(() => {});
+  const exportVideoRef = useRef<() => void>(() => {});
 
   const handlePadPointer = (clientX: number, clientY: number) => {
     const pad = padRef.current;
@@ -734,7 +735,7 @@ export function Studio() {
     return () => observer.disconnect();
   }, [naturalAspect]);
 
-  const handleExport = async (preset: ExportPreset = "1080p") => {
+  const handleExport = async () => {
     if (!ready) return;
 
     if (playerRef.current) {
@@ -746,25 +747,18 @@ export function Studio() {
     setProgress(0);
     setStatusMessage("Initializing GPU encoding engine…");
 
-    const aspect = naturalAspect || (originalWidth > 0 && originalHeight > 0 ? originalWidth / originalHeight : 9 / 16);
-    const isLandscape = aspect > 1;
-
-    let aspectW = renderWidth;
-    let aspectH = renderHeight;
-
-    if (preset !== "original") {
-      const shortSide = preset === "1080p" ? 1080 : preset === "720p" ? 720 : 540;
-      if (isLandscape) {
-        aspectH = shortSide;
-        aspectW = Math.round((shortSide * aspect) / 2) * 2;
-      } else {
-        aspectW = shortSide;
-        aspectH = Math.round((shortSide / aspect) / 2) * 2;
-      }
-    }
+    const device = navigator as Navigator & { deviceMemory?: number };
+    const isLowEndDevice = (device.deviceMemory ?? Infinity) <= 4 || device.hardwareConcurrency <= 4;
+    const sourceMaxDimension = Math.max(renderWidth, renderHeight);
+    const maxExportDimension = isLowEndDevice ? 1920 : sourceMaxDimension;
+    const exportScale = Math.min(1, maxExportDimension / sourceMaxDimension);
+    const aspectW = Math.max(2, Math.round((renderWidth * exportScale) / 2) * 2);
+    const aspectH = Math.max(2, Math.round((renderHeight * exportScale) / 2) * 2);
 
     try {
-      console.log(`[Studio:export] Starting hardware-accelerated video export (${preset} preset: ${aspectW}x${aspectH})...`);
+      console.log(
+        `[Studio:export] Starting hardware-accelerated video export (${aspectW}x${aspectH}${isLowEndDevice ? ", low-end 1080p cap" : ", original resolution"})...`,
+      );
 
       const exportSrc = originalVideoUrl || videoUrl || "";
       const exportFile = videoFile || new Blob([], { type: "video/mp4" });
@@ -857,62 +851,22 @@ export function Studio() {
     URL.revokeObjectURL(url);
   };
 
+  downloadSRTRef.current = downloadSRT;
+  exportVideoRef.current = () => {
+    void handleExport();
+  };
+
+  useEffect(() => {
+    setStudioActions({
+      onDownloadSRT: () => downloadSRTRef.current(),
+      onExport: () => exportVideoRef.current(),
+    });
+
+    return () => setStudioActions(null);
+  }, [setStudioActions]);
+
   return (
-    <div className="flex h-[calc(100vh-108px)] w-full flex-col overflow-hidden bg-[#0A0A0C]">
-      {/* banner ads area */}
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#121214] px-4 sm:px-5">
-        <div className="flex items-center gap-2">
-          <span className="text-[13px] font-semibold text-white/90">
-            <span className="hidden sm:inline"></span>
-          </span>
-        </div>
-
-        {/* Action Controls */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <button
-            onClick={downloadSRT}
-            disabled={!ready || words.length === 0}
-            title="Download SRT Subtitles"
-            className="flex items-center gap-1.5 rounded-xl bg-white/[0.06] border border-white/[0.08] hover:bg-white/[0.12] px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 text-[13px] font-semibold text-white/90 transition-all disabled:opacity-40"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            <span className="hidden sm:inline">Download SRT</span>
-            <span className="sm:hidden">SRT</span>
-          </button>
-
-          <button
-            onClick={() => handleExport("original")}
-            disabled={exporting || !ready}
-            title="Export Video with Captions"
-            className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#2997FF] to-[#0066CC] px-3 py-1.5 sm:px-4 sm:py-1.5 text-[13px] font-semibold text-white shadow-lg shadow-[#2997FF]/25 transition-all disabled:opacity-40"
-          >
-            {exporting ? (
-              <>
-                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                <span>Exporting ({Math.round(progress * 100)}%)</span>
-              </>
-            ) : (
-              <>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                  <polyline points="7 10 12 15 17 10" />
-                  <line x1="12" y1="15" x2="12" y2="3" />
-                </svg>
-                <span className="hidden sm:inline">Export Video</span>
-                <span className="sm:hidden">Export</span>
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
+    <div className="flex h-full w-full flex-col overflow-hidden bg-[#0A0A0C]">
       {/* Main Studio View (Remotion Player + Right Sidebar) */}
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
         {/* Left: Player Viewport */}

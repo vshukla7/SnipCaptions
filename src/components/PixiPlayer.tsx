@@ -325,7 +325,7 @@ export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function Pi
       <div
         onClick={onPositionClick}
         title="Click to edit caption style and position"
-        className="absolute z-20 cursor-pointer pointer-events-auto border border-dashed border-white/0 hover:border-white/40 transition-colors rounded-xl"
+        className="absolute z-20 cursor-pointer pointer-events-auto rounded-xl"
         style={{
           left: `${position.x}%`,
           top: `${position.y}%`,

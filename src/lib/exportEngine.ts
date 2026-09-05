@@ -36,6 +36,8 @@ export interface ExportOptions {
 
 // Fallback H.264 profile codecs in priority order for cross-browser & Safari compatibility
 const H264_CODEC_CANDIDATES = [
+  "avc1.640033", // High Profile, Level 5.1 (4K)
+  "avc1.640032", // High Profile, Level 5.0 (4K)
   "avc1.64002a", // High Profile, Level 4.2 (1080p60)
   "avc1.4d002a", // Main Profile, Level 4.2
   "avc1.42E01E", // Baseline Profile, Level 3.0 (Strict Safari/iOS compatibility)
@@ -70,27 +72,59 @@ async function findSupportedH264Codec(
     }
   }
 
-  // If strict check fails, default to Baseline for universal playback
-  return "avc1.42E01E";
+  throw new Error(
+    `This resolution (${width}x${height}) is not supported by your browser's H.264 encoder. Please use a lower resolution or a device with hardware support for this export.`,
+  );
 }
 
 /**
  * Seeks a video element to a specific timestamp accurately.
  */
-function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
-  return new Promise((resolve) => {
-    if (Math.abs(video.currentTime - time) < 0.005) {
-      resolve();
-      return;
-    }
+async function seekVideo(video: HTMLVideoElement, time: number): Promise<void> {
+  const targetTime = Math.min(video.duration || time, Math.max(0, time));
 
-    const onSeeked = () => {
-      video.removeEventListener("seeked", onSeeked);
+  if (Math.abs(video.currentTime - targetTime) >= 0.005) {
+    await new Promise<void>((resolve) => {
+      const onSeeked = () => {
+        video.removeEventListener("seeked", onSeeked);
+        resolve();
+      };
+
+      video.addEventListener("seeked", onSeeked, { once: true });
+      video.currentTime = targetTime;
+    });
+  }
+
+  // A seek can complete before the newly selected frame is decoded. Waiting
+  // for the media frame prevents repeated keyframes from being composited.
+  const videoWithFrameCallback = video as HTMLVideoElement & {
+    requestVideoFrameCallback?: (
+      callback: (now: number, metadata: { mediaTime: number }) => void,
+    ) => number;
+  };
+  const requestVideoFrameCallback = videoWithFrameCallback.requestVideoFrameCallback?.bind(videoWithFrameCallback);
+  if (!requestVideoFrameCallback) return;
+
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timeoutId);
       resolve();
     };
 
-    video.addEventListener("seeked", onSeeked, { once: true });
-    video.currentTime = Math.min(video.duration || time, Math.max(0, time));
+    const waitForFrame = (_now: number, metadata: { mediaTime: number }) => {
+      if (settled) return;
+      if (metadata.mediaTime + 0.001 >= targetTime) {
+        finish();
+        return;
+      }
+      requestVideoFrameCallback(waitForFrame);
+    };
+
+    const timeoutId = window.setTimeout(finish, 250);
+    requestVideoFrameCallback(waitForFrame);
   });
 }
 
