@@ -7,11 +7,12 @@ const TOP_FONT = '"Helvetica Bold", "Helvetica Neue", sans-serif';
 const BOTTOM_FONT = '"Celosia Nature", "Caveat", "Kalam", cursive';
 
 export function renderSnipcapSpecialTheme(ctx: PixiThemeContext) {
-  const { activeLine, time, fps, fontSize, accentColor, container } = ctx;
+  const { activeLine, time, fps, fontSize, accentColor, baseFont, container } = ctx;
   if (!activeLine || !activeLine.words || activeLine.words.length === 0) return;
 
   const words = activeLine.words;
   const accent = accentColor || "#2997FF";
+  const topFont = baseFont || TOP_FONT;
 
   // Divide into 2 lines. 3-4 words per line.
   const splitIndex = words.length >= 6 ? Math.ceil(words.length / 2) : Math.min(4, words.length);
@@ -52,7 +53,7 @@ export function renderSnipcapSpecialTheme(ctx: PixiThemeContext) {
       const fillStyle = isTopLine ? accent : "#FFFFFF";
 
       const style = new TextStyle({
-        fontFamily: isTopLine ? TOP_FONT : BOTTOM_FONT,
+        fontFamily: isTopLine ? topFont : BOTTOM_FONT,
         fontSize: Math.round(fontSize * (isTopLine ? 1.3 : 0.95)),
         fontWeight: isTopLine ? "900" : "normal",
         fill: fillStyle,

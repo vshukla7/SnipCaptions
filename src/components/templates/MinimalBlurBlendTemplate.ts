@@ -8,11 +8,12 @@ const MIDDLE_FONT = '"Helvetica Bold", "Helvetica Neue", sans-serif';
 const BOTTOM_FONT = '"Celosia Nature", "Caveat", "Kalam", cursive';
 
 export function renderMinimalBlurBlendTheme(ctx: PixiThemeContext) {
-  const { activeLine, activeWord, time, fps, fontSize, accentColor, container } = ctx;
+  const { activeLine, activeWord, time, fps, fontSize, accentColor, baseFont, container } = ctx;
   if (!activeLine || !activeLine.words || activeLine.words.length === 0) return;
 
   const words = activeLine.words;
   const accent = accentColor || "#2997FF";
+  const middleFont = baseFont || MIDDLE_FONT;
 
   // 5-Word Pattern: 2 words on top, 1 BIG hero word in middle, 2 words on bottom
   let topWords: Word[] = [];
@@ -113,7 +114,7 @@ export function renderMinimalBlurBlendTheme(ctx: PixiThemeContext) {
       : 0;
 
     const heroStyle = new TextStyle({
-      fontFamily: MIDDLE_FONT,
+      fontFamily: middleFont,
       fontSize: Math.round(fontSize * 1.45),
       fontWeight: "900",
       fill: accent,

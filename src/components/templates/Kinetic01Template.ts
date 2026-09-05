@@ -6,7 +6,7 @@ const TOP_FONT = '"Celosia Nature", "Caveat", "Kalam", cursive';
 const BOTTOM_FONT = '"Gilroy", "Helvetica Neue", sans-serif';
 
 export function renderKinetic01Theme(ctx: PixiThemeContext) {
-  const { words, activeLine, activeWord, activeWordIdx, time, frame, fps, width, fontSize, accentColor, container } = ctx;
+  const { words, activeLine, activeWord, activeWordIdx, time, frame, fps, width, fontSize, accentColor, baseFont, container } = ctx;
   if (!words || words.length === 0) return;
 
   const activeIndex = activeWordIdx >= 0 ? activeWordIdx : 0;
@@ -14,6 +14,7 @@ export function renderKinetic01Theme(ctx: PixiThemeContext) {
 
   const lineWords = activeLine?.words || [currentWord];
   const accent = accentColor || "#FFD60A";
+  const mainFont = baseFont || BOTTOM_FONT;
 
   const isCurrentActive = time >= currentWord.start && time < currentWord.end;
   const wordRelFrame = isCurrentActive ? Math.max(0, Math.round((time - currentWord.start) * fps)) : 0;
@@ -66,7 +67,7 @@ export function renderKinetic01Theme(ctx: PixiThemeContext) {
 
   // Render Main Bold Hero Active Word
   const heroStyle = new TextStyle({
-    fontFamily: BOTTOM_FONT,
+    fontFamily: mainFont,
     fontSize: Math.round(fontSize * 1.5),
     fontWeight: "900",
     fill: "#FFFFFF",
@@ -97,7 +98,7 @@ export function renderKinetic01Theme(ctx: PixiThemeContext) {
 
     if (bottomTextStr.trim()) {
       const bottomStyle = new TextStyle({
-        fontFamily: BOTTOM_FONT,
+        fontFamily: mainFont,
         fontSize: Math.round(fontSize * 0.85),
         fontWeight: "700",
         fill: "#FFFFFF",

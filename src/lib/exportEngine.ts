@@ -123,19 +123,60 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
 
   if (signal?.aborted) throw new Error("Export cancelled.");
 
-  // 2. Prepare offscreen video element for accurate frame seeking
+  // 2. Prepare offscreen video element for accurate frame seeking with robust multi-fallback resolution
+  let hasVideoSource = false;
+  let createdBlobUrl = "";
   const video = document.createElement("video");
   video.muted = true;
   video.playsInline = true;
   video.preload = "auto";
-  video.src = videoUrl;
+  video.crossOrigin = "anonymous";
 
-  await new Promise<void>((resolve, reject) => {
-    video.onloadedmetadata = () => resolve();
-    video.onerror = () => reject(new Error("Failed to load source video for export."));
-  });
+  const tryLoadVideoSource = (src: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (!src) {
+        resolve(false);
+        return;
+      }
+      const onLoaded = () => {
+        cleanup();
+        resolve(true);
+      };
+      const onError = () => {
+        cleanup();
+        resolve(false);
+      };
+      const cleanup = () => {
+        video.removeEventListener("loadedmetadata", onLoaded);
+        video.removeEventListener("error", onError);
+      };
+      video.addEventListener("loadedmetadata", onLoaded);
+      video.addEventListener("error", onError);
+      video.src = src;
+      video.load();
+    });
+  };
 
-  const duration = durationInSeconds || video.duration || 1;
+  // Step 2A: Try primary videoUrl first
+  if (videoUrl) {
+    hasVideoSource = await tryLoadVideoSource(videoUrl);
+  }
+
+  // Step 2B: Fallback to generating Object URL directly from videoFile Blob if videoUrl fails/is empty
+  if (!hasVideoSource && videoFile && videoFile.size > 0) {
+    try {
+      createdBlobUrl = URL.createObjectURL(videoFile);
+      hasVideoSource = await tryLoadVideoSource(createdBlobUrl);
+    } catch (err) {
+      console.warn("[ExportEngine] Could not create Object URL from videoFile:", err);
+    }
+  }
+
+  if (!hasVideoSource) {
+    console.warn("[ExportEngine] No playable video source found. Exporting captions on canvas background.");
+  }
+
+  const duration = durationInSeconds || (hasVideoSource && video.duration > 0 ? video.duration : 7);
   const totalFrames = Math.max(1, Math.round(duration * fps));
   const bitrate = Math.min(18_000_000, Math.max(4_000_000, Math.round((width * height * fps * 0.15))));
 
@@ -150,20 +191,22 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
   let audioSampleRate = 44100;
   let audioChannels = 2;
 
-  try {
-    const arrayBuf = await videoFile.arrayBuffer();
-    const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (AudioCtxClass) {
-      const actx = new AudioCtxClass();
-      audioBuffer = await actx.decodeAudioData(arrayBuf);
-      audioSampleRate = audioBuffer.sampleRate;
-      audioChannels = Math.min(2, audioBuffer.numberOfChannels);
-      hasAudio = audioBuffer.length > 0;
-      await actx.close();
+  if (videoFile && videoFile.size > 0) {
+    try {
+      const arrayBuf = await videoFile.arrayBuffer();
+      const AudioCtxClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (AudioCtxClass && arrayBuf.byteLength > 0) {
+        const actx = new AudioCtxClass();
+        audioBuffer = await actx.decodeAudioData(arrayBuf);
+        audioSampleRate = audioBuffer.sampleRate;
+        audioChannels = Math.min(2, audioBuffer.numberOfChannels);
+        hasAudio = audioBuffer.length > 0;
+        await actx.close();
+      }
+    } catch (audioErr) {
+      console.warn("[ExportEngine] Audio decoding unavailable, exporting video without audio track:", audioErr);
+      hasAudio = false;
     }
-  } catch (audioErr) {
-    console.warn("[ExportEngine] Audio decoding unavailable, exporting video without audio track:", audioErr);
-    hasAudio = false;
   }
 
   // 5. Initialize MP4Muxer
@@ -263,147 +306,150 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
     customFontFamily,
   };
 
-  // 9. Frame-by-frame rendering & encoding loop
-  const frameDurationUs = Math.round((1 / fps) * 1_000_000);
-  const startTime = performance.now();
+  try {
+    // 9. Frame-by-frame rendering & encoding loop
+    const frameDurationUs = Math.round((1 / fps) * 1_000_000);
+    const startTime = performance.now();
 
-  for (let frameIdx = 0; frameIdx < totalFrames; frameIdx++) {
-    if (signal?.aborted) {
-      pixiRenderer.destroy();
-      throw new Error("Export cancelled.");
-    }
-    if (videoEncoderError) {
-      pixiRenderer.destroy();
-      throw videoEncoderError;
-    }
-
-    const currentTime = frameIdx / fps;
-
-    // A. Seek video to exact frame
-    await seekVideo(video, currentTime);
-
-    // B. Draw base video frame (aspect fitted/contained or covered)
-    ctx2d.fillStyle = "#000000";
-    ctx2d.fillRect(0, 0, width, height);
-
-    const videoAspect = video.videoWidth / (video.videoHeight || 1);
-    const canvasAspect = width / height;
-    let drawW = width;
-    let drawH = height;
-    let drawX = 0;
-    let drawY = 0;
-
-    if (videoAspect > canvasAspect) {
-      drawH = width / videoAspect;
-      drawY = (height - drawH) / 2;
-    } else {
-      drawW = height * videoAspect;
-      drawX = (width - drawW) / 2;
-    }
-
-    ctx2d.drawImage(video, drawX, drawY, drawW, drawH);
-
-    // C. Render Pixi Caption Overlay
-    pixiRenderer.renderTime(currentTime, captionConfig);
-    ctx2d.drawImage(pixiRenderer.canvas, 0, 0, width, height);
-
-    // D. Encode VideoFrame directly into GPU VideoEncoder
-    const timestampUs = Math.round(currentTime * 1_000_000);
-    const videoFrame = new VideoFrame(compositeCanvas, {
-      timestamp: timestampUs,
-      duration: frameDurationUs,
-    });
-
-    const isKeyframe = frameIdx % (fps * 2) === 0;
-    videoEncoder.encode(videoFrame, { keyFrame: isKeyframe });
-
-    // CRITICAL: Close frame immediately to prevent memory leak
-    videoFrame.close();
-
-    // E. Backpressure control: yield event loop if encoder queue fills up
-    while (videoEncoder.encodeQueueSize > 4) {
-      await new Promise((r) => setTimeout(r, 6));
-    }
-
-    // F. Report progress
-    const elapsedSec = (performance.now() - startTime) / 1000;
-    const currentRenderFps = elapsedSec > 0 ? (frameIdx + 1) / elapsedSec : 0;
-    const progress = (frameIdx + 1) / totalFrames;
-
-    if (frameIdx % 6 === 0 || frameIdx === totalFrames - 1) {
-      onProgress?.({
-        progress: Math.min(0.92, 0.05 + progress * 0.87),
-        currentFrame: frameIdx + 1,
-        totalFrames,
-        fps: Math.round(currentRenderFps),
-        stage: `Encoding frames (${Math.round(progress * 100)}%) · ${Math.round(currentRenderFps)} FPS`,
-      });
-    }
-  }
-
-  // 10. Encode Audio Track if AudioEncoder is active
-  if (audioEncoder && audioBuffer) {
-    onProgress?.({ progress: 0.94, currentFrame: totalFrames, totalFrames, fps, stage: "Encoding audio track…" });
-    try {
-      const channelDataList: Float32Array[] = [];
-      for (let ch = 0; ch < audioChannels; ch++) {
-        channelDataList.push(audioBuffer.getChannelData(ch));
+    for (let frameIdx = 0; frameIdx < totalFrames; frameIdx++) {
+      if (signal?.aborted) {
+        throw new Error("Export cancelled.");
+      }
+      if (videoEncoderError) {
+        throw videoEncoderError;
       }
 
-      const totalAudioSamples = audioBuffer.length;
-      const chunkSize = 1024; // Standard AAC frame size
-      const sampleRate = audioBuffer.sampleRate;
+      const currentTime = frameIdx / fps;
 
-      for (let offset = 0; offset < totalAudioSamples; offset += chunkSize) {
-        const currentChunkLen = Math.min(chunkSize, totalAudioSamples - offset);
-        const chunkData = new Float32Array(currentChunkLen * audioChannels);
+      // Base background frame
+      ctx2d.fillStyle = "#000000";
+      ctx2d.fillRect(0, 0, width, height);
 
-        // Interleave channels (or planar for AudioData)
-        for (let i = 0; i < currentChunkLen; i++) {
-          for (let ch = 0; ch < audioChannels; ch++) {
-            chunkData[i * audioChannels + ch] = channelDataList[ch][offset + i];
+      // Draw source video frame if available
+      if (hasVideoSource && video.videoWidth > 0 && video.videoHeight > 0) {
+        await seekVideo(video, currentTime);
+
+        const videoAspect = video.videoWidth / (video.videoHeight || 1);
+        const canvasAspect = width / height;
+        let drawW = width;
+        let drawH = height;
+        let drawX = 0;
+        let drawY = 0;
+
+        if (videoAspect > canvasAspect) {
+          drawH = width / videoAspect;
+          drawY = (height - drawH) / 2;
+        } else {
+          drawW = height * videoAspect;
+          drawX = (width - drawW) / 2;
+        }
+
+        ctx2d.drawImage(video, drawX, drawY, drawW, drawH);
+      }
+
+      // Render Pixi Caption Overlay
+      pixiRenderer.renderTime(currentTime, captionConfig);
+      ctx2d.drawImage(pixiRenderer.canvas, 0, 0, width, height);
+
+      // Encode VideoFrame directly into GPU VideoEncoder
+      const timestampUs = Math.round(currentTime * 1_000_000);
+      const videoFrame = new VideoFrame(compositeCanvas, {
+        timestamp: timestampUs,
+        duration: frameDurationUs,
+      });
+
+      const isKeyframe = frameIdx % (fps * 2) === 0;
+      videoEncoder.encode(videoFrame, { keyFrame: isKeyframe });
+      videoFrame.close();
+
+      // Backpressure control
+      while (videoEncoder.encodeQueueSize > 4) {
+        await new Promise((r) => setTimeout(r, 6));
+      }
+
+      // Report progress
+      const elapsedSec = (performance.now() - startTime) / 1000;
+      const currentRenderFps = elapsedSec > 0 ? (frameIdx + 1) / elapsedSec : 0;
+      const progress = (frameIdx + 1) / totalFrames;
+
+      if (frameIdx % 6 === 0 || frameIdx === totalFrames - 1) {
+        onProgress?.({
+          progress: Math.min(0.92, 0.05 + progress * 0.87),
+          currentFrame: frameIdx + 1,
+          totalFrames,
+          fps: Math.round(currentRenderFps),
+          stage: `Encoding frames (${Math.round(progress * 100)}%) · ${Math.round(currentRenderFps)} FPS`,
+        });
+      }
+    }
+
+    // 10. Encode Audio Track if AudioEncoder is active
+    if (audioEncoder && audioBuffer) {
+      onProgress?.({ progress: 0.94, currentFrame: totalFrames, totalFrames, fps, stage: "Encoding audio track…" });
+      try {
+        const channelDataList: Float32Array[] = [];
+        for (let ch = 0; ch < audioChannels; ch++) {
+          channelDataList.push(audioBuffer.getChannelData(ch));
+        }
+
+        const totalAudioSamples = audioBuffer.length;
+        const chunkSize = 1024;
+        const sampleRate = audioBuffer.sampleRate;
+
+        for (let offset = 0; offset < totalAudioSamples; offset += chunkSize) {
+          const currentChunkLen = Math.min(chunkSize, totalAudioSamples - offset);
+          const chunkData = new Float32Array(currentChunkLen * audioChannels);
+
+          for (let i = 0; i < currentChunkLen; i++) {
+            for (let ch = 0; ch < audioChannels; ch++) {
+              chunkData[i * audioChannels + ch] = channelDataList[ch][offset + i];
+            }
+          }
+
+          const audioTimestampUs = Math.round((offset / sampleRate) * 1_000_000);
+          const audioData = new AudioData({
+            format: "f32",
+            sampleRate,
+            numberOfFrames: currentChunkLen,
+            numberOfChannels: audioChannels,
+            timestamp: audioTimestampUs,
+            data: chunkData,
+          });
+
+          audioEncoder.encode(audioData);
+          audioData.close();
+
+          while (audioEncoder.encodeQueueSize > 8) {
+            await new Promise((r) => setTimeout(r, 6));
           }
         }
 
-        const audioTimestampUs = Math.round((offset / sampleRate) * 1_000_000);
-        const audioData = new AudioData({
-          format: "f32",
-          sampleRate,
-          numberOfFrames: currentChunkLen,
-          numberOfChannels: audioChannels,
-          timestamp: audioTimestampUs,
-          data: chunkData,
-        });
-
-        audioEncoder.encode(audioData);
-        audioData.close(); // Clean up audio memory
-
-        while (audioEncoder.encodeQueueSize > 8) {
-          await new Promise((r) => setTimeout(r, 6));
-        }
+        await audioEncoder.flush();
+        audioEncoder.close();
+      } catch (audioEncErr) {
+        console.warn("[ExportEngine] Error during audio encoding:", audioEncErr);
       }
+    }
 
-      await audioEncoder.flush();
-      audioEncoder.close();
-    } catch (audioEncErr) {
-      console.warn("[ExportEngine] Error during audio encoding:", audioEncErr);
+    // 11. Finalize video encoder and MP4 muxer
+    onProgress?.({ progress: 0.97, currentFrame: totalFrames, totalFrames, fps, stage: "Finalizing MP4 container…" });
+
+    await videoEncoder.flush();
+    videoEncoder.close();
+
+    muxer.finalize();
+
+    const finalBlob = new Blob([muxerTarget.buffer], { type: "video/mp4" });
+    console.timeEnd("[ExportEngine] Total export time");
+    console.log(`[ExportEngine] Export complete! Generated MP4: ${(finalBlob.size / 1024 / 1024).toFixed(2)} MB`);
+
+    onProgress?.({ progress: 1.0, currentFrame: totalFrames, totalFrames, fps, stage: "Export complete!" });
+
+    return finalBlob;
+  } finally {
+    pixiRenderer.destroy();
+    if (createdBlobUrl) {
+      URL.revokeObjectURL(createdBlobUrl);
     }
   }
-
-  // 11. Finalize video encoder and MP4 muxer
-  onProgress?.({ progress: 0.97, currentFrame: totalFrames, totalFrames, fps, stage: "Finalizing MP4 container…" });
-
-  await videoEncoder.flush();
-  videoEncoder.close();
-
-  pixiRenderer.destroy();
-  muxer.finalize();
-
-  const finalBlob = new Blob([muxerTarget.buffer], { type: "video/mp4" });
-  console.timeEnd("[ExportEngine] Total export time");
-  console.log(`[ExportEngine] Export complete! Generated MP4: ${(finalBlob.size / 1024 / 1024).toFixed(2)} MB`);
-
-  onProgress?.({ progress: 1.0, currentFrame: totalFrames, totalFrames, fps, stage: "Export complete!" });
-
-  return finalBlob;
 }

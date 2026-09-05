@@ -389,24 +389,18 @@ function AnimatedPreview({ themeId, themeAccent }: { themeId: string; themeAccen
     }
 
     case "neon": {
-      const words = ["the", "quick", "BROWN", "fox"];
       return (
-        <div className="flex items-center gap-1.5 justify-center">
-          {words.map((w, i) => {
-            const active = activeIdx === i;
-            return (
-              <span
-                key={w}
-                className="text-[13px] font-black transition-all duration-200"
-                style={{
-                  color: active ? accent : "#FFFFFF",
-                  textShadow: active ? `0 0 8px ${accent}, 0 0 18px ${accent}` : "0 0 4px rgba(255,255,255,0.3)",
-                }}
-              >
-                {w}
-              </span>
-            );
-          })}
+        <div className="text-center font-black">
+          <span
+            className="text-[14px] font-black uppercase tracking-wide transition-all duration-300"
+            style={{
+              color: "#FFFFFF",
+              WebkitTextStroke: `1px ${accent}`,
+              textShadow: `0 0 10px ${accent}, 0 0 22px ${accent}`,
+            }}
+          >
+            THE QUICK BROWN
+          </span>
         </div>
       );
     }

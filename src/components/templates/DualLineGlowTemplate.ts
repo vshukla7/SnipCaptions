@@ -6,11 +6,12 @@ const TOP_FONT = '"Gilroy", "Helvetica Neue", sans-serif';
 const BOTTOM_FONT = '"Celosia Nature", "Caveat", "Kalam", cursive';
 
 export function renderDualLineGlowTheme(ctx: PixiThemeContext) {
-  const { activeLine, time, fps, fontSize, accentColor, container } = ctx;
+  const { activeLine, time, fps, fontSize, accentColor, baseFont, container } = ctx;
   if (!activeLine || !activeLine.words || activeLine.words.length === 0) return;
 
   const words = activeLine.words;
   const accent = accentColor || "#FFB800";
+  const topFont = baseFont || TOP_FONT;
 
   // Split words into 3-4 words on top line and 3-4 words on bottom line
   const topWordCount = words.length >= 5 ? Math.min(4, Math.max(3, Math.ceil(words.length / 2))) : Math.max(1, Math.ceil(words.length / 2));
@@ -30,7 +31,7 @@ export function renderDualLineGlowTheme(ctx: PixiThemeContext) {
     const wordAlpha = isSpoken ? 0.35 + fadeProgress * 0.65 : 0.3;
 
     const style = new TextStyle({
-      fontFamily: TOP_FONT,
+      fontFamily: topFont,
       fontSize: Math.round(fontSize * 1.15),
       fontWeight: "900",
       fill: isCurrent ? accent : isSpoken ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)",
