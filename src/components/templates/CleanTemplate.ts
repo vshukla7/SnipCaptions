@@ -11,6 +11,21 @@ export function renderCleanTheme(ctx: PixiThemeContext) {
   let currentX = 0;
   const spacing = fontSize * 0.25;
 
+  // Reusable TextStyle instance created once outside the per-word loop
+  const style = new TextStyle({
+    fontFamily: baseFont,
+    fontSize: Math.round(fontSize * 1.05),
+    fontWeight: "700",
+    fill: "#FFFFFF",
+    dropShadow: {
+      alpha: 0.6,
+      angle: Math.PI / 6,
+      blur: 2,
+      color: "#000000",
+      distance: 2,
+    },
+  });
+
   words.forEach((w) => {
     const isSpoken = time >= w.start;
     const wordRelFrame = isSpoken ? Math.max(0, Math.round((time - w.start) * fps)) : 0;
@@ -35,20 +50,6 @@ export function renderCleanTheme(ctx: PixiThemeContext) {
     const wordAlpha = isSpoken
       ? interpolate(slideSpr, [0, 1], [0, 1], { extrapolateRight: "clamp" })
       : 0;
-
-    const style = new TextStyle({
-      fontFamily: baseFont,
-      fontSize: Math.round(fontSize * 1.05),
-      fontWeight: "700",
-      fill: "#FFFFFF",
-      dropShadow: {
-        alpha: 0.7,
-        angle: Math.PI / 6,
-        blur: 6,
-        color: "#000000",
-        distance: 3,
-      },
-    });
 
     const textNode = new Text({ text: w.word, style });
     textNode.anchor.set(0, 0.5);

@@ -98,9 +98,25 @@ export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function Pi
     const renderer = new PixiCaptionRenderer();
     rendererRef.current = renderer;
 
+    const getPreviewCanvasDims = () => {
+      const isMobile = typeof window !== "undefined" && (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768);
+      const baseShort = isMobile ? 360 : 540; // Downscaled preview resolution: 540p desktop, 360p mobile (75% less GPU load)
+      const aspect = naturalAspect && naturalAspect > 0 ? naturalAspect : 9 / 16;
+      if (aspect > 1) {
+        return {
+          w: Math.round(baseShort * aspect),
+          h: baseShort,
+        };
+      } else {
+        return {
+          w: baseShort,
+          h: Math.round(baseShort / aspect),
+        };
+      }
+    };
+
     const initRenderer = async () => {
-      const w = 1080;
-      const h = naturalAspect && naturalAspect > 1 ? Math.round(1080 / naturalAspect) : 1920;
+      const { w, h } = getPreviewCanvasDims();
       await renderer.init(w, h);
       if (!mounted || !canvasContainerRef.current) {
         renderer.destroy();
@@ -147,8 +163,11 @@ export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function Pi
     const renderer = rendererRef.current;
     if (!renderer) return;
 
-    const w = 1080;
-    const h = naturalAspect && naturalAspect > 1 ? Math.round(1080 / naturalAspect) : 1920;
+    const isMobile = typeof window !== "undefined" && (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768);
+    const baseShort = isMobile ? 360 : 540;
+    const aspect = naturalAspect && naturalAspect > 0 ? naturalAspect : 9 / 16;
+    const w = aspect > 1 ? Math.round(baseShort * aspect) : baseShort;
+    const h = aspect > 1 ? baseShort : Math.round(baseShort / aspect);
 
     renderer.updateConfig({
       width: w,

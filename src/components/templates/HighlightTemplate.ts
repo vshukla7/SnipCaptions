@@ -12,19 +12,34 @@ export function renderHighlightTheme(ctx: PixiThemeContext) {
   let currentX = 0;
   const spacing = fontSize * 0.32;
 
+  // Pre-created reusable style instances outside the per-word loop
+  const activeStyle = new TextStyle({
+    fontFamily: baseFont,
+    fontSize: Math.round(fontSize * 1.05),
+    fontWeight: "700",
+    fill: accent,
+    dropShadow: { alpha: 0.8, blur: 2, color: accent, distance: 0 },
+  });
+
+  const pastStyle = new TextStyle({
+    fontFamily: baseFont,
+    fontSize: Math.round(fontSize * 1.05),
+    fontWeight: "700",
+    fill: "#FFFFFF",
+    dropShadow: { alpha: 0.5, blur: 2, color: "#000000", distance: 2 },
+  });
+
+  const futureStyle = new TextStyle({
+    fontFamily: baseFont,
+    fontSize: Math.round(fontSize * 1.05),
+    fontWeight: "700",
+    fill: "rgba(255,255,255,0.45)",
+  });
+
   lineWords.forEach((w) => {
     const isCurrent = time >= w.start && time < w.end;
     const isPast = time >= w.end;
-
-    const style = new TextStyle({
-      fontFamily: baseFont,
-      fontSize: Math.round(fontSize * 1.05),
-      fontWeight: "700",
-      fill: isCurrent ? accent : isPast ? "#FFFFFF" : "rgba(255,255,255,0.45)",
-      dropShadow: isCurrent
-        ? { alpha: 0.9, blur: 12, color: accent, distance: 0 }
-        : { alpha: 0.6, blur: 4, color: "#000000", distance: 2 },
-    });
+    const style = isCurrent ? activeStyle : isPast ? pastStyle : futureStyle;
 
     const wordText = new Text({ text: w.word, style });
     wordText.anchor.set(0, 0.5);
