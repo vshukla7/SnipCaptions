@@ -2,9 +2,15 @@
  * Pixi.js (v8+) Hardware-Accelerated Caption Rendering Engine
  * Renders all animated caption themes directly on WebGL canvas
  * with sub-millisecond frame execution, spring physics, and dynamic text effects.
+ *
+ * GPU Video Compositing:
+ *   - mountVideoBackground() uploads an HTMLVideoElement as a WebGL texture (PIXI.Texture.from).
+ *   - updateVideoFrame() refreshes the GPU texture each frame with zero CPU readback.
+ *   - unmountVideoBackground() tears down the sprite & texture.
+ *   This eliminates the 2D-canvas intermediary and all GPU↔CPU round-trips during export.
  */
 
-import { Application, Container } from "pixi.js";
+import { Application, Container, Sprite, Texture } from "pixi.js";
 import type { CaptionPosition, CaptionThemeId, Word } from "../types";
 import { preloadAllFonts } from "../fontLoader";
 import { PIXI_THEMES } from "@/components/templates";
@@ -79,6 +85,13 @@ export class PixiCaptionRenderer {
   private currentConfig: CaptionRendererConfig | null = null;
   private isInitialized = false;
   private initPromise: Promise<void> | null = null;
+
+  // ── GPU Video Background ─────────────────────────────────────────────────
+  /** The sprite holding the video WebGL texture. Lives at z-index 0 in rootContainer. */
+  private videoSprite: Sprite | null = null;
+  /** The Pixi texture wrapping the HTMLVideoElement. Updated GPU-side each frame. */
+  private videoTexture: Texture | null = null;
+  // ─────────────────────────────────────────────────────────────────────────
 
   constructor(canvas?: HTMLCanvasElement) {
     if (canvas) {
@@ -185,12 +198,112 @@ export class PixiCaptionRenderer {
     }
   }
 
+  // ── GPU Video Background API ─────────────────────────────────────────────
+
+  /**
+   * Mounts an HTMLVideoElement as a GPU-resident background sprite at the bottom
+   * of the Pixi stage (index 0, beneath all caption containers).
+   *
+   * PIXI.Texture.from(videoElement) creates a WebGL texture directly from the
+   * video element — no CPU pixel readback, no 2D canvas intermediary.
+   *
+   * Call updateVideoFrame() each frame to refresh the GPU texture from the
+   * current video frame position (also zero CPU-copy on hardware-accelerated browsers).
+   *
+   * @param videoEl     - The HTMLVideoElement to use as the background source.
+   * @param videoW      - Native video width (pixels) for aspect-ratio letterboxing.
+   * @param videoH      - Native video height (pixels) for aspect-ratio letterboxing.
+   */
+  public mountVideoBackground(videoEl: HTMLVideoElement, videoW: number, videoH: number): void {
+    if (!this.app || !this.isInitialized || !this.rootContainer) return;
+
+    // Tear down any pre-existing video sprite first
+    this.unmountVideoBackground();
+
+    // Create GPU texture from video element. Pixi v8 wraps it as a VideoSource internally.
+    this.videoTexture = Texture.from(videoEl);
+
+    this.videoSprite = new Sprite(this.videoTexture);
+
+    // Letterbox: scale the sprite so it fills the canvas while preserving aspect ratio.
+    const videoAspect = videoW / Math.max(videoH, 1);
+    const canvasAspect = this.width / Math.max(this.height, 1);
+
+    let spriteW: number;
+    let spriteH: number;
+
+    if (videoAspect > canvasAspect) {
+      // Video is wider than canvas → pillarbox (fit height)
+      spriteH = this.height;
+      spriteW = this.height * videoAspect;
+    } else {
+      // Video is taller (or equal) → letterbox (fit width)
+      spriteW = this.width;
+      spriteH = this.width / videoAspect;
+    }
+
+    this.videoSprite.width = spriteW;
+    this.videoSprite.height = spriteH;
+    this.videoSprite.x = (this.width - spriteW) / 2;
+    this.videoSprite.y = (this.height - spriteH) / 2;
+
+    // Insert at position 0 so captions always render on top.
+    this.rootContainer.addChildAt(this.videoSprite, 0);
+
+    console.log(
+      `[PixiCaptionRenderer] Video background mounted — GPU texture ${videoW}×${videoH} → sprite ${spriteW.toFixed(0)}×${spriteH.toFixed(0)} on ${this.width}×${this.height} canvas`,
+    );
+  }
+
+  /**
+   * Refreshes the GPU-side video texture from the current HTMLVideoElement frame.
+   * This is a zero-CPU-copy operation on hardware-accelerated browsers — the browser
+   * uploads the decoded video frame directly to the WebGL texture via texImage2D,
+   * which in turn is handled by the GPU driver without touching the CPU heap.
+   *
+   * Must be called once per frame, immediately after the video has been seeked/decoded.
+   */
+  public updateVideoFrame(): void {
+    if (!this.videoTexture || !this.videoSprite) return;
+
+    // Pixi v8: texture.source holds the underlying TextureSource (VideoSource).
+    // Calling update() signals Pixi to re-upload the video frame to WebGL on the next render.
+    const src = this.videoTexture.source;
+    if (src && typeof (src as { update?: () => void }).update === "function") {
+      (src as { update: () => void }).update();
+    }
+  }
+
+  /**
+   * Removes and destroys the video background sprite & texture.
+   * Safe to call even if no video background is currently mounted.
+   */
+  public unmountVideoBackground(): void {
+    if (this.videoSprite) {
+      if (this.rootContainer && this.rootContainer.children.includes(this.videoSprite)) {
+        this.rootContainer.removeChild(this.videoSprite);
+      }
+      this.videoSprite.destroy({ texture: false }); // don't double-destroy the texture
+      this.videoSprite = null;
+    }
+    if (this.videoTexture) {
+      this.videoTexture.destroy(true);
+      this.videoTexture = null;
+    }
+  }
+
+  // ────────────────────────────────────────────────────────────────────────
+
   public renderTime(time: number, config?: CaptionRendererConfig): void {
     if (config) {
       this.updateConfig(config);
     }
     const cfg = this.currentConfig;
     if (!this.app || !this.isInitialized || !this.captionContainer || !cfg) return;
+
+    // If a video background sprite is mounted, refresh its GPU texture from the
+    // current video element frame before compositing captions on top.
+    this.updateVideoFrame();
 
     const { words, theme, accentColor, position, scale, customFontFamily, maxWordsPerLine = 3 } = cfg;
 
@@ -281,6 +394,9 @@ export class PixiCaptionRenderer {
 
   public destroy(): void {
     try {
+      // Clean up video background resources before destroying the app
+      this.unmountVideoBackground();
+
       if (this.app) {
         if (this.app.ticker) {
           this.app.ticker.stop();

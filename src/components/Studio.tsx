@@ -4,8 +4,10 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import { PixiPlayer, PixiPlayerRef } from "./PixiPlayer";
 import { useApp } from "@/lib/store";
 import { CAPTION_THEMES } from "@/lib/types";
-import { ExportResolutionModal, ExportPreset } from "./ExportResolutionModal";
+import { ExportResolutionModal, ExportProceedPayload } from "./ExportResolutionModal";
+import type { ExportPreset } from "./ExportResolutionModal";
 import { exportVideoWithWebCodecs } from "@/lib/exportEngine";
+import type { PerformanceMode, HardwareTier } from "@/lib/exportEngine";
 
 const FPS = 30; // 30 FPS Lock
 
@@ -567,6 +569,8 @@ export function Studio() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
+  /** Stores the hardware tier detected by the export engine so it can be shown in the modal on next open */
+  const [detectedTier, setDetectedTier] = useState<HardwareTier | null>(null);
 
   // Auto detect mobile device
   useEffect(() => {
@@ -734,7 +738,10 @@ export function Studio() {
     return () => observer.disconnect();
   }, [naturalAspect]);
 
-  const handleExport = async (preset: ExportPreset = "1080p") => {
+  const handleExport = async (
+    preset: ExportPreset = "1080p",
+    performanceMode: PerformanceMode = "auto",
+  ) => {
     if (!ready) return;
 
     if (playerRef.current) {
@@ -764,7 +771,7 @@ export function Studio() {
     }
 
     try {
-      console.log(`[Studio:export] Starting hardware-accelerated video export (${preset} preset: ${aspectW}x${aspectH})...`);
+      console.log(`[Studio:export] Starting export — preset: ${preset} (${aspectW}×${aspectH}), mode: ${performanceMode}`);
 
       const exportSrc = originalVideoUrl || videoUrl || "";
       const exportFile = videoFile || new Blob([], { type: "video/mp4" });
@@ -782,9 +789,13 @@ export function Studio() {
         height: aspectH,
         fps: 60,
         durationInSeconds,
+        performanceMode,
         onProgress: (p) => {
           setProgress(p.progress);
           setStatusMessage(p.stage);
+        },
+        onTierDetected: (tier) => {
+          setDetectedTier(tier);
         },
       });
 
@@ -815,6 +826,10 @@ export function Studio() {
       setExporting(false);
       setStatus("ready");
     }
+  };
+
+  const handleExportModalProceed = ({ preset, performanceMode }: ExportProceedPayload) => {
+    handleExport(preset, performanceMode);
   };
 
   const downloadSRT = () => {
@@ -885,7 +900,11 @@ export function Studio() {
           </button>
 
           <button
-            onClick={() => handleExport("original")}
+            id="studio-export-btn"
+            onClick={() => {
+              if (exporting) return;
+              setShowExportModal(true);
+            }}
             disabled={exporting || !ready}
             title="Export Video with Captions"
             className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#2997FF] to-[#0066CC] px-3 py-1.5 sm:px-4 sm:py-1.5 text-[13px] font-semibold text-white shadow-lg shadow-[#2997FF]/25 transition-all disabled:opacity-40"
@@ -1239,6 +1258,16 @@ export function Studio() {
           </button>
         </div>
       )}
+
+      {/* Export Settings Modal — wired to showExportModal, threads performanceMode + preset into handleExport */}
+      <ExportResolutionModal
+        open={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        originalWidth={originalWidth}
+        originalHeight={originalHeight}
+        onProceed={handleExportModalProceed}
+        detectedTier={detectedTier}
+      />
     </div>
   );
 }

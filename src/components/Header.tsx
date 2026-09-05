@@ -26,11 +26,11 @@ export function Header() {
               by ayphic
             </span>
           </div>
-          {showStudio && (
+          {/* {showStudio && (
             <span className="hidden md:inline-block rounded-full bg-[#2997FF]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#2997FF] border border-[#2997FF]/20">
               Studio Mode
             </span>
-          )}
+          )} */}
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-3">
@@ -43,7 +43,7 @@ export function Header() {
               <span className="sm:hidden">+ Video</span>
             </button>
           )}
-          {!showStudio && (
+          {/* {!showStudio && (
             <button
               onClick={openDemoStudio}
               className="rounded-full bg-[#2997FF]/10 border border-[#2997FF]/30 px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 text-[12px] font-semibold text-[#2997FF] transition-all hover:bg-[#2997FF]/20"
@@ -51,7 +51,7 @@ export function Header() {
               <span className="hidden sm:inline">Studio Preview</span>
               <span className="sm:hidden">Preview</span>
             </button>
-          )}
+          )} */}
           {!hasApiKey && (
             <button
               onClick={() => setGuideModalOpen(true)}

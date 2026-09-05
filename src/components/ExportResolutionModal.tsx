@@ -3,8 +3,14 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import type { PerformanceMode, HardwareTier } from "@/lib/exportEngine";
 
 export type ExportPreset = "original" | "1080p" | "720p" | "540p";
+
+export interface ExportProceedPayload {
+  preset: ExportPreset;
+  performanceMode: PerformanceMode;
+}
 
 export function ExportResolutionModal({
   open,
@@ -17,24 +23,21 @@ export function ExportResolutionModal({
   onClose: () => void;
   originalWidth: number;
   originalHeight: number;
-  onProceed: (preset: ExportPreset) => void;
+  onProceed: (payload: ExportProceedPayload) => void;
+  detectedTier?: HardwareTier | null;
 }) {
   const [mounted, setMounted] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
-  const [isSafari, setIsSafari] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<ExportPreset>("1080p");
+  const [performanceMode, setPerformanceMode] = useState<PerformanceMode>("auto");
 
   useEffect(() => {
     setMounted(true);
     if (typeof window !== "undefined") {
       const mobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
-      setIsMobile(mobile);
       if (mobile) {
         setSelectedPreset("720p");
+        setPerformanceMode("speed"); // Default to speed mode on mobile
       }
-      // Check if AudioEncoder is missing (typical Safari/iOS Safari)
-      const lacksAudioEncoder = !("AudioEncoder" in window);
-      setIsSafari(lacksAudioEncoder);
     }
   }, []);
 
@@ -57,29 +60,54 @@ export function ExportResolutionModal({
     }
   };
 
-  const presets: { id: ExportPreset; label: string; desc: string; badge?: string }[] = [
+  const presets: { id: ExportPreset; label: string; sub: string; badge?: string }[] = [
     {
       id: "1080p",
-      label: "1080p Full HD",
-      desc: "Optimal balance of sharpness & render speed",
+      label: "1080p",
+      sub: "Full HD",
       badge: "Recommended",
     },
     {
       id: "720p",
-      label: "720p HD",
-      desc: "~2.5x faster render, highly fluid playback",
+      label: "720p",
+      sub: "HD · Faster",
       badge: "Fast",
     },
     {
       id: "540p",
-      label: "540p Mobile",
-      desc: "~4.5x ultra-fast render, minimal memory footprint",
-      badge: "Ultra Fast",
+      label: "540p",
+      sub: "SD · Ultra Fast",
     },
     {
       id: "original",
-      label: "Original Source",
-      desc: `Raw source quality (${originalWidth} × ${originalHeight})`,
+      label: "Original",
+      sub: "Source Resolution",
+    },
+  ];
+
+  const perfModes: {
+    id: PerformanceMode;
+    icon: string;
+    label: string;
+    desc: string;
+  }[] = [
+    {
+      id: "auto",
+      icon: "⚡",
+      label: "Auto",
+      desc: "Automatically selects the best speed for your device.",
+    },
+    {
+      id: "quality",
+      icon: "🎬",
+      label: "Quality",
+      desc: "Maximum detail and frame accuracy.",
+    },
+    {
+      id: "speed",
+      icon: "🚀",
+      label: "Speed",
+      desc: "Fastest export, recommended for mobile and low-end PCs.",
     },
   ];
 
@@ -90,127 +118,129 @@ export function ExportResolutionModal({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
           onClick={onClose}
         >
-          <div
-            className="w-full max-w-md rounded-3xl border border-white/[0.1] bg-[#1C1C1E] p-6 shadow-2xl"
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 6 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: 6 }}
+            transition={{ type: "spring", stiffness: 450, damping: 30 }}
+            className="w-full max-w-sm rounded-3xl border border-white/10 bg-[#1C1C1E] p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-[18px] font-bold text-white tracking-tight">
-                Export Resolution & Speed
+            {/* Header */}
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[17px] font-bold text-white tracking-tight">
+                Export Video
               </h2>
               <button
                 onClick={onClose}
-                className="rounded-full p-1 text-white/40 hover:text-white transition-colors"
-                aria-label="Close"
+                className="rounded-full p-1.5 text-white/40 hover:text-white hover:bg-white/10 transition-colors"
+                aria-label="Close export modal"
               >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <line x1="18" y1="6" x2="6" y2="18" />
                   <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
               </button>
             </div>
 
-            <p className="text-[12px] text-white/50 mb-4 leading-normal">
-              Select your export resolution profile. Lowering resolution exponentially accelerates client-side WebCodecs encoding.
-            </p>
-
-            {/* Resolution Profile Selection */}
-            <div className="space-y-2 mb-5">
-              {presets.map((p) => {
-                const isSelected = selectedPreset === p.id;
-                const { w, h } = getPresetDimensions(p.id);
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setSelectedPreset(p.id)}
-                    className={`w-full rounded-2xl p-3 border text-left transition-all flex items-center justify-between ${
-                      isSelected
-                        ? "border-[#2997FF] bg-[#2997FF]/10 shadow-lg shadow-[#2997FF]/10"
-                        : "border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06]"
-                    }`}
-                  >
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-2">
+            {/* Quality / Resolution Selection */}
+            <div className="mb-4">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-white/40 mb-2">
+                Resolution
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {presets.map((p) => {
+                  const isSelected = selectedPreset === p.id;
+                  const { w, h } = getPresetDimensions(p.id);
+                  return (
+                    <button
+                      key={p.id}
+                      id={`export-preset-${p.id}`}
+                      type="button"
+                      onClick={() => setSelectedPreset(p.id)}
+                      className={`rounded-2xl p-3 border text-left transition-all relative ${
+                        isSelected
+                          ? "border-[#2997FF] bg-[#2997FF]/15 text-white"
+                          : "border-white/[0.08] bg-white/[0.03] text-white/70 hover:bg-white/[0.06]"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
                         <span className="text-[13px] font-bold text-white">{p.label}</span>
-                        {p.badge && (
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                            p.id === "1080p" ? "bg-[#2997FF]/20 text-[#2997FF]" : "bg-emerald-500/20 text-emerald-400"
-                          }`}>
+                        {p.badge && isSelected && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[#2997FF] text-white">
                             {p.badge}
                           </span>
                         )}
                       </div>
-                      <span className="text-[11px] text-white/40 mt-0.5">{p.desc}</span>
-                    </div>
-
-                    <div className="text-right shrink-0 ml-2">
-                      <span className="text-[11px] font-mono text-white/60 bg-white/[0.06] px-2 py-1 rounded-md">
+                      <div className="text-[11px] text-white/50 mt-0.5">{p.sub}</div>
+                      <div className="text-[10px] font-mono text-white/40 mt-1">
                         {w} × {h}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {/* Dynamic Guidance Warning Banner */}
-            {isMobile && (
-              <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-200/90">
-                <div className="flex gap-2 items-start">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="shrink-0 mt-0.5">
-                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                    <line x1="12" y1="9" x2="12" y2="13" />
-                    <line x1="12" y1="17" x2="12.01" y2="17" />
-                  </svg>
-                  <div>
-                    <span className="font-semibold text-white">Mobile Web Tip:</span> 720p or 540p renders up to 4x faster on mobile devices and avoids browser memory limits.
-                  </div>
-                </div>
+            {/* Performance Mode / Speed */}
+            <div className="mb-5">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-white/40 mb-2">
+                Export Speed
               </div>
-            )}
-
-            {isSafari && (
-              <div className="mb-4 rounded-2xl border border-[#2997FF]/20 bg-[#2997FF]/10 p-3 text-[11px] leading-relaxed text-white/80">
-                <div className="flex gap-2 items-start">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#2997FF" strokeWidth="2.5" className="shrink-0 mt-0.5">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                    <line x1="12" y1="17" x2="12.01" y2="17" />
-                  </svg>
-                  <div>
-                    <span className="font-semibold text-white">iOS Safari Audio:</span> Original audio will be auto-muxed back in post-render via browser FFmpeg.
-                  </div>
-                </div>
+              <div className="grid grid-cols-3 gap-2 mb-2">
+                {perfModes.map((m) => {
+                  const isSelected = performanceMode === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      id={`export-perf-${m.id}`}
+                      type="button"
+                      onClick={() => setPerformanceMode(m.id)}
+                      className={`flex items-center justify-center gap-1.5 rounded-xl py-2 px-2 border text-center transition-all ${
+                        isSelected
+                          ? "border-[#2997FF] bg-[#2997FF]/15 text-white shadow-sm"
+                          : "border-white/[0.08] bg-white/[0.03] text-white/60 hover:bg-white/[0.06]"
+                      }`}
+                    >
+                      <span className="text-[13px]">{m.icon}</span>
+                      <span className="text-[12px] font-bold">{m.label}</span>
+                    </button>
+                  );
+                })}
               </div>
-            )}
+              <p className="text-[11px] text-white/50 px-1">
+                {perfModes.find((m) => m.id === performanceMode)?.desc}
+              </p>
+            </div>
 
             {/* Actions */}
-            <div className="flex gap-3">
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
+                id="export-modal-cancel"
                 onClick={onClose}
-                className="flex-1 rounded-xl border border-white/[0.1] bg-white/[0.02] hover:bg-white/[0.06] py-2 text-[13px] font-semibold text-white transition-colors"
+                className="flex-1 rounded-xl border border-white/10 bg-white/[0.04] hover:bg-white/10 py-2.5 text-[13px] font-semibold text-white/80 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="button"
+                id="export-modal-start"
                 onClick={() => {
                   onClose();
                   setTimeout(() => {
-                    onProceed(selectedPreset);
+                    onProceed({ preset: selectedPreset, performanceMode });
                   }, 100);
                 }}
-                className="flex-1 rounded-xl bg-gradient-to-r from-[#2997FF] to-[#0066CC] py-2 text-[13px] font-semibold text-white shadow-lg shadow-[#2997FF]/25 hover:shadow-[#2997FF]/35 transition-all"
+                className="flex-1 rounded-xl bg-[#2997FF] hover:bg-[#0077ED] py-2.5 text-[13px] font-semibold text-white shadow-lg shadow-[#2997FF]/20 transition-all"
               >
-                Start Fast Export
+                Export
               </button>
             </div>
-          </div>
+          </motion.div>
         </motion.div>
       ) : null}
     </AnimatePresence>
