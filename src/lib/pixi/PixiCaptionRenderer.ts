@@ -108,7 +108,7 @@ export class PixiCaptionRenderer {
     this.initPromise = (async () => {
       await preloadAllFonts();
 
-      const maxDim = 2048;
+      const maxDim = 4096;
       let targetW = width;
       let targetH = height;
       if (targetW > maxDim || targetH > maxDim) {
@@ -187,7 +187,7 @@ export class PixiCaptionRenderer {
 
   public resize(width: number, height: number): void {
     if (!this.app || !this.isInitialized) return;
-    const maxDim = 2048;
+    const maxDim = 4096;
     let targetW = width;
     let targetH = height;
     if (targetW > maxDim || targetH > maxDim) {

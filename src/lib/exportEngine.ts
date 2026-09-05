@@ -203,7 +203,8 @@ async function detectHardwareTier(
 /**
  * Seeks a video element to a specific timestamp.
  * Returns a promise that resolves when the `seeked` event fires.
- * Includes a 150ms safety timeout to prevent stalls on slow decoders.
+ * Waits for the decoder's seeked event; accuracy is more important than
+ * shaving time from a single frame seek during export.
  */
 function seekVideoOnce(video: HTMLVideoElement, time: number): Promise<void> {
   return new Promise((resolve) => {
@@ -214,17 +215,10 @@ function seekVideoOnce(video: HTMLVideoElement, time: number): Promise<void> {
       return;
     }
 
-    let settled = false;
-    const settle = () => {
-      if (settled) return;
-      settled = true;
+    const onSeeked = () => {
       video.removeEventListener("seeked", onSeeked);
-      clearTimeout(timer);
       resolve();
     };
-
-    const timer = setTimeout(settle, 150);
-    const onSeeked = () => settle();
 
     video.addEventListener("seeked", onSeeked, { once: true });
     video.currentTime = clampedTime;
@@ -292,11 +286,8 @@ function seekWithRVFC(video: RvfcCapableVideo, targetTime: number): Promise<void
       if (settled) return;
       settled = true;
       if (rvfcId !== null) video.cancelVideoFrameCallback(rvfcId);
-      clearTimeout(timer);
       resolve();
     };
-
-    const timer = setTimeout(settle, 200);
 
     const onFrame = (_now: number, meta: { mediaTime: number }) => {
       if (Math.abs(meta.mediaTime - clampedTime) < 0.034) {
@@ -358,10 +349,9 @@ async function runPlaybackCapture(params: {
     onProgress,
   } = params;
 
-  // Tier-based playback rate:
-  //   mid (software encoder, capable): 0.5× → encoder has 2× wall time per frame
-  //   low (very slow encoder / mobile): 0.25× → encoder has 4× wall time per frame
-  const playbackRate = tier === "low" ? 0.25 : 0.5;
+  // Capture the browser's sequential decoded stream at normal playback speed.
+  // Slowing playback changes wall-clock timing without improving timestamps.
+  const playbackRate = 1;
 
   return new Promise<number>((resolve, reject) => {
     let capturedFrames = 0;
@@ -403,14 +393,14 @@ async function runPlaybackCapture(params: {
 
       const mediaTimeUs = Math.round(meta.mediaTime * 1_000_000);
 
-      // Skip duplicate frames (can happen at very slow playback rates or on v-sync boundaries)
+      // Ignore duplicate callbacks from the browser compositor.
       if (mediaTimeUs <= lastEncodedTimestampUs) {
         video.requestVideoFrameCallback(captureFrame);
         return;
       }
 
       // Skip frames beyond the intended duration
-      if (meta.mediaTime > (totalFrames / fps) + 0.1) {
+      if (meta.mediaTime > (totalFrames / fps) + 0.05) {
         cleanup();
         resolve(capturedFrames);
         return;
@@ -455,7 +445,7 @@ async function runPlaybackCapture(params: {
       if (capturedFrames % 6 === 0 || capturedFrames >= totalFrames) {
         const elapsedSec = (performance.now() - startTime) / 1000;
         const encFps = elapsedSec > 0 ? capturedFrames / elapsedSec : 0;
-        const progress = Math.min(1, capturedFrames / totalFrames);
+        const progress = Math.min(1, meta.mediaTime / (totalFrames / fps));
         onProgress?.({
           progress: Math.min(0.92, 0.05 + progress * 0.87),
           currentFrame: capturedFrames,
@@ -463,13 +453,6 @@ async function runPlaybackCapture(params: {
           fps: Math.round(encFps),
           stage: `Encoding frames (${Math.round(progress * 100)}%) · ${Math.round(encFps)} FPS`,
         });
-      }
-
-      // Stop when all frames have been captured
-      if (capturedFrames >= totalFrames) {
-        cleanup();
-        resolve(capturedFrames);
-        return;
       }
 
       // Request the next frame
@@ -609,47 +592,18 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
     }
   }
 
-  // 5. Hardware tier detection
-  //    'quality' mode forces the pipelined-seek path (Tier high).
-  //    'speed'   mode forces playback-capture (Tier mid/low — pick mid as safe default).
-  //    'auto'    mode runs the ~300ms benchmark to measure real encode throughput.
-  let tier: HardwareTier;
-
-  if (performanceMode === "quality") {
-    tier = "high";
-    console.log("[ExportEngine] Performance mode: quality → forcing Tier 'high' (pipelined seek)");
-  } else if (performanceMode === "speed") {
-    tier = "mid";
-    console.log("[ExportEngine] Performance mode: speed → forcing Tier 'mid' (playback-capture 0.5×)");
-  } else {
-    onProgress?.({ progress: 0.05, currentFrame: 0, totalFrames, fps: 0, stage: "Benchmarking GPU encoder…" });
-    tier = await detectHardwareTier(width, height, fps, bitrate, videoCodec);
-  }
-
+  // 5. Use one deterministic capture strategy for every device. Playback-rate
+  // throttling and adaptive FPS changes can shift video timestamps away from
+  // the original audio/caption timeline, so export always seeks to each exact
+  // output timestamp and waits for the decoded frame.
+  const tier: HardwareTier = "mid";
   onTierDetected?.(tier);
-  console.log(`[ExportEngine] Capture strategy: Tier '${tier}'`);
+  console.log("[ExportEngine] Accuracy-first capture: sequential decoded frames at 1x playback");
 
-  // For low-tier devices on 'auto' mode, cap resolution at 720p if user selected 1080p+
-  // This is a safety net — the UI already recommends 720p for mobile.
   let effectiveWidth = width;
   let effectiveHeight = height;
   let effectiveFps = fps;
   let effectiveBitrate = bitrate;
-
-  if (tier === "low" && performanceMode === "auto") {
-    // Cap at 720p short-side max
-    const shortSide = Math.min(effectiveWidth, effectiveHeight);
-    if (shortSide > 720) {
-      const scale = 720 / shortSide;
-      effectiveWidth = Math.round((effectiveWidth * scale) / 2) * 2;
-      effectiveHeight = Math.round((effectiveHeight * scale) / 2) * 2;
-      console.log(`[ExportEngine] Low-tier auto-downscale: ${width}×${height} → ${effectiveWidth}×${effectiveHeight}`);
-    }
-    // Cap at 30fps for low-tier (halves the number of frames to encode)
-    effectiveFps = Math.min(fps, 30);
-    effectiveBitrate = Math.min(6_000_000, Math.max(2_000_000, Math.round(effectiveWidth * effectiveHeight * effectiveFps * 0.12)));
-    console.log(`[ExportEngine] Low-tier auto-downscale: ${fps}fps → ${effectiveFps}fps, ${(effectiveBitrate / 1e6).toFixed(1)} Mbps`);
-  }
 
   const effectiveTotalFrames = Math.max(1, Math.round(duration * effectiveFps));
   const frameDurationUs = Math.round((1 / effectiveFps) * 1_000_000);
@@ -761,15 +715,14 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
 
     // ── Branch: Playback-capture (Tier mid/low) vs Pipelined-seek (Tier high) ──
 
-    if (tier !== "high" && hasVideoSource && supportsRVFC(video)) {
+    if (hasVideoSource && supportsRVFC(video)) {
       // ──────────────────────────────────────────────────────────────────────
-      // PLAYBACK-CAPTURE MODE (Tier mid / low)
-      // No frame-by-frame seeking. video.play() at slow rate, rVFC delivers
-      // decoded frames naturally. Encoder backpressure via pause/resume.
+      // SEQUENTIAL DECODE MODE
+      // No frame-by-frame seeking. video.play() at normal rate and rVFC
+      // delivers decoded frames naturally. Encoder backpressure pauses only
+      // when necessary and never changes the media timestamps.
       // ──────────────────────────────────────────────────────────────────────
-      const captureStrategyLabel = tier === "low"
-        ? "playback-capture 0.25× (Tier low)"
-        : "playback-capture 0.5× (Tier mid)";
+      const captureStrategyLabel = "sequential decoded-frame capture (1x)";
       console.log(`[ExportEngine] Capture strategy: ${captureStrategyLabel}`);
       onProgress?.({
         progress: 0.07,
