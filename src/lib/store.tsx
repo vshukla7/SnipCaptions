@@ -18,7 +18,7 @@ import type {
   Word,
 } from "./types";
 import { transcribeVideo } from "./gemini";
-import { detectH264Codec } from "./utils";
+import { validateVideoContainerAndCodec } from "./utils";
 
 // ─── Proxy status ──────────────────────────────────────────────────────────────
 export type ProxyStatus = "idle" | "generating" | "ready" | "failed";
@@ -61,8 +61,6 @@ interface AppContextValue {
 
   customFontFamily: string | null;
   setCustomFontFamily: (f: string | null) => void;
-
-  recentColors: string[];
 
   words: Word[];
   transcription: TranscriptionResult | null;
@@ -229,9 +227,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setError(null);
     setStatus("idle");
     try {
-      const isH264 = await detectH264Codec(f);
-      if (!isH264) {
-        setError("Only H.264 (AVC) encoded videos are accepted. Please convert your video and try again.");
+      const validation = await validateVideoContainerAndCodec(f);
+      if (!validation.supported) {
+        setError(validation.reason || "Only H.264 (AVC) encoded videos are accepted. Please convert your video and try again.");
         setVideoFile(null);
         setVideoUrl(null);
         setOriginalVideoUrl(null);
@@ -239,7 +237,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return;
       }
     } catch {
-      setError("Failed to verify video codec. Please ensure it is a valid H.264 video.");
+      setError("Failed to verify video container. Please ensure it is a valid MP4/H.264 video.");
       return;
     }
 
@@ -309,19 +307,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         durationSeconds: durationInSeconds,
         onStatus: (m) => setStatusMessage(m),
         onProgress: (p) => {
-          // Scale transcription progress to 0 - 0.95 to leave room for preview engine optimization
-          setProgress(p.progress * 0.95);
+          setProgress(p.progress);
           setWordsSoFar(p.words);
         },
       });
 
-      // 2. Sequential Preview Engine Optimization task
-      if (needsProxy) {
-        setProgress(0.95);
-        await generateProxy(videoFile, originalVideoUrl || videoUrl || "");
-      }
-
-      console.log("[SnipCaptions:store] transcription and proxy success · words=", result.words.length, "language=", result.language);
+      console.log("[SnipCaptions:store] transcription success · words=", result.words.length, "language=", result.language);
       setTranscription(result);
       setWordsSoFar(result.words.length);
       setProgress(1);
@@ -438,7 +429,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setCustomAccentColor,
     customFontFamily,
     setCustomFontFamily,
-    recentColors,
     words,
     transcription,
     durationInSeconds,

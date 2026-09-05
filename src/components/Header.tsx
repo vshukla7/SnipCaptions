@@ -43,8 +43,7 @@ export function Header() {
               <span className="sm:hidden">+ Video</span>
             </button>
           )}
-          
-          {/* {!showStudio && (
+          {!showStudio && (
             <button
               onClick={openDemoStudio}
               className="rounded-full bg-[#2997FF]/10 border border-[#2997FF]/30 px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 text-[12px] font-semibold text-[#2997FF] transition-all hover:bg-[#2997FF]/20"
@@ -52,16 +51,16 @@ export function Header() {
               <span className="hidden sm:inline">Studio Preview</span>
               <span className="sm:hidden">Preview</span>
             </button>
-          )} */}
-         
-
-          <button
-            onClick={() => setGuideModalOpen(true)}
-            className="rounded-full px-2.5 py-1.5 sm:px-3 sm:py-1.5 text-[12px] font-medium text-white/70 transition-colors hover:text-white hover:bg-white/[0.06]"
-          >
-            <span className="hidden sm:inline">Setup Guide</span>
-            <span className="sm:hidden">Guide</span>
-          </button>
+          )}
+          {!hasApiKey && (
+            <button
+              onClick={() => setGuideModalOpen(true)}
+              className="rounded-full px-2.5 py-1.5 sm:px-3 sm:py-1.5 text-[12px] font-medium text-white/70 transition-colors hover:text-white hover:bg-white/[0.06]"
+            >
+              <span className="hidden sm:inline">Setup Guide</span>
+              <span className="sm:hidden">Guide</span>
+            </button>
+          )}
 
           <Link
             href="/blogs"

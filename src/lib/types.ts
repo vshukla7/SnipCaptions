@@ -7,11 +7,8 @@ export type CaptionThemeId =
   | "black_punch"
   | "liquid_glass"
   | "one_word"
-  | "yellow_script"
   | "kinetic_01"
   | "dual_line_glow"
-  | "pw_edits"
-  | "mr_beast"
   | "minimal_blend"
   | "minimal_blur_blend"
   | "premiere_glow";
@@ -87,21 +84,21 @@ export const CAPTION_THEMES: CaptionThemeMeta[] = [
     accent: "#FFB800",
     wordByWord: true,
   },
-  {
-    id: "pw_edits",
-    name: "PW Edits",
-    description: "Montserrat top + Impact crimson bottom with red aura glow and camera push-in zoom.",
-    fontClass: "font-creative",
-    accent: "#FF1E2A",
+    {
+    id: "snipcap_special",
+    name: "Snipcap Special",
+    description: "Premium Apple-style hybrid slide-up/left layout with dramatic timing.",
+    fontClass: "font-display",
+    accent: "#30d158",
     wordByWord: true,
   },
-  {
-    id: "kinetic",
-    name: "Kinetic Bounce",
-    description: "Words bounce in with spring physics.",
-    fontClass: "font-creative",
-    accent: "#f97316",
-    wordByWord: true,
+    {
+    id: "clean",
+    name: "Clean Minimal",
+    description: "Crisp white captions, centered, no fuss.",
+    fontClass: "font-display",
+    accent: "#ffffff",
+    wordByWord: false,
   },
   {
     id: "highlight",
@@ -111,21 +108,13 @@ export const CAPTION_THEMES: CaptionThemeMeta[] = [
     accent: "#ffd60a",
     wordByWord: true,
   },
-  {
-    id: "snipcap_special",
-    name: "Snipcap Special",
-    description: "Premium Apple-style hybrid slide-up/left layout with dramatic timing.",
+   {
+    id: "one_word",
+    name: "One Word Solo",
+    description: "Display only the currently spoken word, with zero animations.",
     fontClass: "font-display",
-    accent: "#30d158",
+    accent: "#ffd60a",
     wordByWord: true,
-  },
-  {
-    id: "clean",
-    name: "Clean Minimal",
-    description: "Crisp white captions, centered, no fuss.",
-    fontClass: "font-display",
-    accent: "#ffffff",
-    wordByWord: false,
   },
   {
     id: "neon",
@@ -136,35 +125,11 @@ export const CAPTION_THEMES: CaptionThemeMeta[] = [
     wordByWord: false,
   },
   {
-    id: "black_punch",
-    name: "Black Punch",
-    description: "Crisp black lettering with stark high-contrast typography.",
-    fontClass: "font-creative",
-    accent: "#000000",
-    wordByWord: true,
-  },
-  {
     id: "liquid_glass",
     name: "Liquid Glass",
     description: "Elegant glassmorphism pill badge layout.",
     fontClass: "font-display",
-    accent: "#ffffff",
-    wordByWord: true,
-  },
-  {
-    id: "one_word",
-    name: "One Word Solo",
-    description: "Display only the currently spoken word, with zero animations.",
-    fontClass: "font-display",
-    accent: "#ffd60a",
-    wordByWord: true,
-  },
-  {
-    id: "yellow_script",
-    name: "Yellow Script",
-    description: "Cursive accent top line + heavy bold bottom line. Reels/Shorts style.",
-    fontClass: "font-display",
-    accent: "#FFDC00",
+    accent: "#38BDF8",
     wordByWord: true,
   },
   {
@@ -175,12 +140,20 @@ export const CAPTION_THEMES: CaptionThemeMeta[] = [
     accent: "#FFD60A",
     wordByWord: true,
   },
-  {
-    id: "mr_beast",
-    name: "MrBeast Style",
-    description: "Futura/Bebas bold uppercase with thick black outline, shadow, fast pops, and yellow highlight.",
+   {
+    id: "kinetic",
+    name: "Kinetic Bounce",
+    description: "Words bounce in with spring physics.",
     fontClass: "font-creative",
-    accent: "#FFE600",
+    accent: "#f97316",
+    wordByWord: true,
+  },
+  {
+    id: "black_punch",
+    name: "Black Punch",
+    description: "Crisp black lettering with stark high-contrast typography.",
+    fontClass: "font-creative",
+    accent: "#000000",
     wordByWord: true,
   },
 ];

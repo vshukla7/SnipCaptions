@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
-import { Player, PlayerRef } from "@remotion/player";
+import { PixiPlayer, PixiPlayerRef } from "./PixiPlayer";
 import { useApp } from "@/lib/store";
 import { CAPTION_THEMES } from "@/lib/types";
-import { CaptionComposition } from "./CaptionComposition";
 import { ExportResolutionModal, ExportPreset } from "./ExportResolutionModal";
+import { exportVideoWithWebCodecs } from "@/lib/exportEngine";
 
 const FPS = 30; // 30 FPS Lock
 
@@ -134,177 +134,383 @@ function FontDropdown({ value, onChange }: { value: string | null; onChange: (v:
 // 6 steps: 0–5 so dual_line_glow can reveal 5 words + bottom row
 const PREVIEW_STEPS = 6;
 
-function AnimatedPreview({ themeId, accent }: { themeId: string; accent: string }) {
+function AnimatedPreview({ themeId, themeAccent }: { themeId: string; themeAccent: string }) {
   const [activeIdx, setActiveIdx] = useState(0);
 
   useEffect(() => {
-    const id = setInterval(() => setActiveIdx((i) => (i + 1) % PREVIEW_STEPS), 560);
+    const id = setInterval(() => setActiveIdx((i) => (i + 1) % 4), 560);
     return () => clearInterval(id);
   }, []);
 
-  if (themeId === "kinetic_01") {
-    return (
-      <div className="relative flex h-full w-full items-center justify-center overflow-hidden">
-        <span
-          className="absolute text-[9px] font-bold"
-          style={{
-            fontFamily: "cursive",
-            color: "rgba(255,255,255,0.55)",
-            top: "10%", left: "10%",
-            opacity: activeIdx >= 1 ? 1 : 0,
-            transform: activeIdx >= 1 ? "translateY(0px)" : "translateY(6px)",
-            transition: "opacity 0.3s ease, transform 0.3s ease",
-          }}
-        >
-          quick
-        </span>
-        <span
-          className="text-[18px] font-black uppercase"
-          style={{
-            color: accent,
-            textShadow: `0 0 10px ${accent}55`,
-            transform: `scale(${activeIdx === 1 ? 1.1 : 1})`,
-            transition: "transform 0.3s ease",
-          }}
-        >
-          BROWN
-        </span>
-        <span
-          className="absolute text-[9px] font-bold"
-          style={{
-            fontFamily: "cursive",
-            color: "rgba(255,255,255,0.55)",
-            bottom: "10%", right: "10%",
-            opacity: activeIdx === 2 ? 1 : 0,
-            transform: activeIdx === 2 ? "translateY(0px)" : "translateY(-6px)",
-            transition: "opacity 0.3s ease, transform 0.3s ease",
-          }}
-        >
-          fox
-        </span>
-      </div>
-    );
-  }
+  const accent = themeAccent;
 
-  if (themeId === "snipcap_special") {
-    return (
-      <div className="text-center leading-none">
+  switch (themeId) {
+    case "liquid_glass": {
+      const words = ["the", "quick", "brown", "fox"];
+      return (
         <div
-          className="text-[9px] lowercase transition-all duration-300"
+          className="text-[11px] font-medium transition-all duration-300"
           style={{
-            fontFamily: "cursive",
-            color: activeIdx === 0 ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.3)",
+            background: "rgba(255, 255, 255, 0.12)",
+            border: "1px solid rgba(255, 255, 255, 0.25)",
+            borderRadius: "20px",
+            padding: "5px 14px",
+            display: "inline-flex",
+            gap: "6px",
+            alignItems: "center",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
           }}
         >
-          ha to aapne
+          {words.map((w, idx) => {
+            const isSpoken = activeIdx === idx;
+            return (
+              <span
+                key={w}
+                className="transition-all duration-200"
+                style={{
+                  color: isSpoken ? accent : "#FFFFFF",
+                  fontWeight: isSpoken ? "800" : "500",
+                  opacity: isSpoken ? 1 : 0.5,
+                }}
+              >
+                {w}
+              </span>
+            );
+          })}
         </div>
-        <div
-          className="text-[15px] font-black uppercase my-0.5 transition-all duration-300"
-          style={{
-            color: accent,
-            textShadow: `0 0 8px ${accent}`,
-            filter: activeIdx === 1 ? "blur(0px)" : "blur(3px)",
-            opacity: activeIdx === 1 ? 1 : 0.35,
-            transform: activeIdx === 1 ? "scale(1.08)" : "scale(0.9)",
-          }}
-        >
-          ELON
-        </div>
-        <div
-          className="text-[8px] uppercase font-semibold tracking-wide transition-all duration-300"
-          style={{ color: activeIdx === 2 ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.15)" }}
-        >
-          kya kaha
-        </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  if (themeId === "yellow_script") {
-    return (
-      <div className="text-center leading-none">
-        <div
-          className="text-[10px] lowercase transition-all duration-300"
-          style={{
-            fontFamily: "cursive",
-            color: activeIdx === 0 ? accent : "rgba(255,255,255,0.4)",
-          }}
-        >
-          the quick
+    case "minimal_blur_blend": {
+      return (
+        <div className="text-center leading-none space-y-0.5">
+          <div className="text-[9px] text-white/60 font-medium" style={{ fontFamily: '"Celosia Nature", cursive' }}>
+            the quick
+          </div>
+          <div
+            className="text-[16px] font-black uppercase tracking-tight transition-all duration-300"
+            style={{
+              fontFamily: '"Helvetica Bold", sans-serif',
+              color: accent,
+              textShadow: `0 0 12px ${accent}aa`,
+              filter: activeIdx === 1 ? "blur(0px)" : "blur(3px)",
+              opacity: activeIdx === 1 ? 1 : 0.4,
+              transform: activeIdx === 1 ? "scale(1.05)" : "scale(0.95)",
+            }}
+          >
+            BROWN
+          </div>
+          <div
+            className="text-[8px] text-white/60 font-medium transition-all duration-300"
+            style={{
+              fontFamily: '"Celosia Nature", cursive',
+              opacity: activeIdx >= 2 ? 1 : 0.3,
+              transform: activeIdx >= 2 ? "translateY(0)" : "translateY(3px)",
+            }}
+          >
+            fox jumps
+          </div>
         </div>
-        <div
-          className="text-[15px] font-black uppercase my-0.5 transition-all duration-300"
-          style={{
-            color: activeIdx === 1 ? accent : "rgba(255,255,255,0.4)",
-            textShadow: activeIdx === 1 ? `0 0 8px ${accent}66` : "none",
-            transform: activeIdx === 1 ? "scale(1.05)" : "scale(1)",
-          }}
-        >
-          BROWN
-        </div>
-        <div
-          className="text-[8px] font-bold uppercase tracking-wide transition-all duration-300"
-          style={{ color: activeIdx === 2 ? accent : "rgba(255,255,255,0.4)" }}
-        >
-          fox jumps
-        </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  if (themeId === "dual_line_glow") {
-    const topWords = ["EK", "CHEEZ", "SHURU", "SE", "LEKE"];
-    const botWords = ["Ab Tak", "Samjhata", "Chala"];
-    return (
-      <div className="text-center leading-none space-y-1 px-1 w-full">
-        {/* Top bold glow row — all always rendered, opacity cycles */}
-        <div className="flex gap-[3px] justify-center flex-wrap">
-          {topWords.map((w, i) => (
+    case "minimal_blend": {
+      return (
+        <div className="text-center leading-none space-y-0.5">
+          <div className="text-[10px] text-white/70 font-semibold uppercase tracking-wider">the quick</div>
+          <div
+            className="text-[17px] font-black uppercase text-white tracking-tighter transition-all duration-300"
+            style={{
+              transform: activeIdx === 1 ? "translateY(0)" : "translateY(4px)",
+              opacity: activeIdx === 1 ? 1 : 0.5,
+            }}
+          >
+            BROWN
+          </div>
+          <div className="text-[9px] text-white/50 font-medium uppercase tracking-wider">fox jumps</div>
+        </div>
+      );
+    }
+
+    case "premiere_glow": {
+      return (
+        <div className="text-center leading-none space-y-0.5">
+          <div className="text-[10px] text-white/70 font-semibold uppercase tracking-wider">the quick</div>
+          <div
+            className="text-[17px] font-black uppercase tracking-tighter transition-all duration-300"
+            style={{
+              color: accent,
+              textShadow: `0 0 16px ${accent}, 0 0 30px ${accent}aa`,
+              transform: activeIdx === 1 ? "scale(1.08)" : "scale(0.96)",
+              opacity: activeIdx === 1 ? 1 : 0.6,
+            }}
+          >
+            BROWN
+          </div>
+          <div className="text-[9px] text-white/50 font-medium uppercase tracking-wider">fox jumps</div>
+        </div>
+      );
+    }
+
+    case "dual_line_glow": {
+      const topWords = ["EK", "CHEEZ", "SHURU", "SE"];
+      const botWords = ["Ab Tak", "Samjhata"];
+      return (
+        <div className="text-center leading-none space-y-1 px-1 w-full">
+          <div className="flex gap-[3px] justify-center flex-wrap">
+            {topWords.map((w, i) => (
+              <span
+                key={w}
+                className="text-[10px] font-black uppercase transition-all duration-200"
+                style={{
+                  fontFamily: '"NCL Gasdrifo", "Gilroy", sans-serif',
+                  opacity: activeIdx >= i ? 1 : 0.3,
+                  color: activeIdx === i ? accent : "#ffffff",
+                  textShadow: activeIdx === i ? `0 0 10px ${accent}` : "none",
+                }}
+              >
+                {w}
+              </span>
+            ))}
+          </div>
+          <div className="flex gap-[4px] justify-center flex-wrap">
+            {botWords.map((w, i) => (
+              <span
+                key={w}
+                className="text-[8px] font-medium transition-all duration-300"
+                style={{
+                  fontFamily: "cursive",
+                  color: "rgba(255,255,255,0.8)",
+                  opacity: activeIdx >= 2 ? 1 : 0.2,
+                  transform: activeIdx >= 2 ? "translateY(0)" : "translateY(4px)",
+                }}
+              >
+                {w}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    case "snipcap_special": {
+      return (
+        <div className="text-center leading-none">
+          <div
+            className="text-[9px] lowercase transition-all duration-300"
+            style={{
+              fontFamily: "cursive",
+              color: activeIdx === 0 ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.3)",
+            }}
+          >
+            ha to aapne
+          </div>
+          <div
+            className="text-[15px] font-black uppercase my-0.5 transition-all duration-300"
+            style={{
+              color: accent,
+              textShadow: `0 0 10px ${accent}`,
+              filter: activeIdx === 1 ? "blur(0px)" : "blur(2px)",
+              opacity: activeIdx === 1 ? 1 : 0.4,
+              transform: activeIdx === 1 ? "scale(1.08)" : "scale(0.9)",
+            }}
+          >
+            ELON
+          </div>
+          <div
+            className="text-[8px] lowercase font-semibold tracking-wide transition-all duration-300"
+            style={{
+              fontFamily: "cursive",
+              color: activeIdx === 2 ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.3)",
+            }}
+          >
+            kya kaha
+          </div>
+        </div>
+      );
+    }
+
+    case "clean": {
+      const words = ["the", "quick", "brown", "fox"];
+      return (
+        <div className="flex items-center gap-1.5 justify-center">
+          {words.map((w, i) => (
             <span
               key={w}
-              className="text-[10px] font-black uppercase"
+              className="text-[13px] font-bold text-white transition-all duration-300"
               style={{
-                fontFamily: '"NCL Gasdrifo", "Gilroy", sans-serif',
-                opacity: activeIdx >= i ? 1 : 0,
-                color: activeIdx === i ? accent : activeIdx > i ? "#ffffff" : "#ffffff",
-                textShadow: activeIdx === i
-                  ? `0 0 8px ${accent}, 0 0 18px ${accent}88`
-                  : activeIdx > i
-                  ? `0 0 3px ${accent}44`
-                  : "none",
-                transition: "opacity 0.25s ease, color 0.25s ease, text-shadow 0.25s ease",
+                opacity: activeIdx >= i ? 1 : 0.3,
+                transform: activeIdx >= i ? "translateY(0)" : "translateY(5px)",
               }}
             >
               {w}
             </span>
           ))}
         </div>
-        {/* Bottom cursive slide-up row */}
-        <div className="flex gap-[4px] justify-center flex-wrap">
-          {botWords.map((w, i) => (
-            <span
-              key={w}
-              className="text-[8px] font-medium"
-              style={{
-                fontFamily: "cursive",
-                color: "rgba(255,255,255,0.80)",
-                opacity: activeIdx >= topWords.length - 1 ? 1 : 0,
-                transform: activeIdx >= topWords.length - 1 ? "translateY(0px)" : "translateY(5px)",
-                transition: `opacity 0.3s ease ${i * 60}ms, transform 0.3s ease ${i * 60}ms`,
-              }}
-            >
-              {w}
-            </span>
-          ))}
-        </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  return null;
+    case "highlight": {
+      const words = ["the", "quick", "BROWN", "fox"];
+      return (
+        <div className="flex items-center gap-1.5 justify-center">
+          {words.map((w, i) => {
+            const active = activeIdx === i;
+            return (
+              <span
+                key={w}
+                className="text-[13px] font-extrabold transition-all duration-200"
+                style={{
+                  color: active ? accent : "#FFFFFF",
+                  transform: active ? "scale(1.15)" : "scale(1)",
+                  textShadow: active ? `0 0 10px ${accent}88` : "none",
+                }}
+              >
+                {w}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    case "one_word": {
+      const words = ["THE", "QUICK", "BROWN", "FOX"];
+      return (
+        <div className="text-center font-black">
+          <span
+            className="text-[16px] uppercase tracking-wider transition-all duration-150"
+            style={{ color: accent }}
+          >
+            {words[activeIdx % words.length]}
+          </span>
+        </div>
+      );
+    }
+
+    case "neon": {
+      const words = ["the", "quick", "BROWN", "fox"];
+      return (
+        <div className="flex items-center gap-1.5 justify-center">
+          {words.map((w, i) => {
+            const active = activeIdx === i;
+            return (
+              <span
+                key={w}
+                className="text-[13px] font-black transition-all duration-200"
+                style={{
+                  color: active ? accent : "#FFFFFF",
+                  textShadow: active ? `0 0 8px ${accent}, 0 0 18px ${accent}` : "0 0 4px rgba(255,255,255,0.3)",
+                }}
+              >
+                {w}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    case "kinetic_01": {
+      return (
+        <div className="relative flex h-full w-full items-center justify-center overflow-hidden">
+          <span
+            className="absolute text-[9px] font-bold"
+            style={{
+              fontFamily: "cursive",
+              color: "rgba(255,255,255,0.55)",
+              top: "10%", left: "10%",
+              opacity: activeIdx >= 1 ? 1 : 0,
+              transform: activeIdx >= 1 ? "translateY(0px)" : "translateY(6px)",
+              transition: "opacity 0.3s ease, transform 0.3s ease",
+            }}
+          >
+            quick
+          </span>
+          <span
+            className="text-[18px] font-black uppercase"
+            style={{
+              color: accent,
+              textShadow: `0 0 10px ${accent}55`,
+              transform: `scale(${activeIdx === 1 ? 1.1 : 1})`,
+              transition: "transform 0.3s ease",
+            }}
+          >
+            BROWN
+          </span>
+          <span
+            className="absolute text-[9px] font-bold"
+            style={{
+              fontFamily: "cursive",
+              color: "rgba(255,255,255,0.55)",
+              bottom: "10%", right: "10%",
+              opacity: activeIdx === 2 ? 1 : 0,
+              transform: activeIdx === 2 ? "translateY(0px)" : "translateY(-6px)",
+              transition: "opacity 0.3s ease, transform 0.3s ease",
+            }}
+          >
+            fox
+          </span>
+        </div>
+      );
+    }
+
+    case "kinetic": {
+      const words = ["the", "quick", "BROWN", "fox"];
+      return (
+        <div className="flex items-center gap-1.5 justify-center">
+          {words.map((w, i) => {
+            const active = activeIdx === i;
+            return (
+              <span
+                key={w}
+                className="text-[13px] font-extrabold transition-all duration-300"
+                style={{
+                  color: active ? accent : "#FFFFFF",
+                  transform: active ? "scale(1.25) translateY(-2px)" : "scale(1) translateY(0)",
+                }}
+              >
+                {w}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    case "black_punch": {
+      const words = ["THE", "QUICK", "BROWN", "FOX"];
+      return (
+        <div className="flex items-center gap-1.5 justify-center">
+          {words.map((w, i) => {
+            const active = activeIdx === i;
+            return (
+              <span
+                key={w}
+                className="text-[12px] font-black uppercase transition-all duration-300 ease-out"
+                style={{
+                  color: active ? "#000000" : "#FFFFFF",
+                  backgroundColor: active ? "#FFFFFF" : "transparent",
+                  padding: active ? "3px 7px" : "0px",
+                  borderRadius: active ? "5px" : "0px",
+                  transform: active ? "scale(1.12)" : "scale(1)",
+                  boxShadow: active ? "0 2px 10px rgba(255,255,255,0.4)" : "none",
+                }}
+              >
+                {w}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    default:
+      return null;
+  }
 }
 
-const ANIMATED_THEMES = new Set(["kinetic_01", "snipcap_special", "yellow_script", "dual_line_glow"]);
+const ANIMATED_THEMES = new Set(["kinetic_01", "snipcap_special", "dual_line_glow"]);
 
 // Fallback dummy words for instant studio UI preview (18 words / ~9 s)
 const DUMMY_WORDS = [
@@ -355,7 +561,6 @@ export function Studio() {
     setStatusMessage,
     setCaptionTheme,
     updateWord,
-    recentColors,
   } = useApp();
 
   // Use uploaded words/duration or fallback dummy data for live preview
@@ -392,7 +597,7 @@ export function Studio() {
   }, [proxyToast, clearProxyToast]);
 
   const playerContainerRef = useRef<HTMLDivElement | null>(null);
-  const playerRef = useRef<PlayerRef>(null);
+  const playerRef = useRef<PixiPlayerRef>(null);
   const padRef = useRef<HTMLDivElement | null>(null);
 
   const handlePadPointer = (clientX: number, clientY: number) => {
@@ -545,7 +750,7 @@ export function Studio() {
     setExporting(true);
     setStatus("exporting");
     setProgress(0);
-    setStatusMessage("Initializing rendering engine…");
+    setStatusMessage("Initializing GPU encoding engine…");
 
     const aspect = naturalAspect || (originalWidth > 0 && originalHeight > 0 ? originalWidth / originalHeight : 9 / 16);
     const isLandscape = aspect > 1;
@@ -566,147 +771,28 @@ export function Studio() {
 
     try {
       console.log(`[Studio:export] Starting hardware-accelerated video export (${preset} preset: ${aspectW}x${aspectH})...`);
-      
-      const { renderMediaOnWeb, canRenderMediaOnWeb } = await import("@remotion/web-renderer");
-      const controller = new AbortController();
 
-      // 1. Verify browser compatibility and check for AudioEncoder support
-      let isMuted = false;
-      const renderCheck = await canRenderMediaOnWeb({
-        container: "mp4",
-        videoCodec: "h264",
+      const exportSrc = originalVideoUrl || videoUrl || "";
+      const exportFile = videoFile || new Blob([], { type: "video/mp4" });
+
+      const finalBlob = await exportVideoWithWebCodecs({
+        videoFile: exportFile,
+        videoUrl: exportSrc,
+        words,
+        theme: captionTheme,
+        accentColor: accent,
+        position: captionPosition,
+        scale: captionScale,
+        customFontFamily,
         width: aspectW,
         height: aspectH,
-        muted: false,
-      });
-
-      if (!renderCheck.canRender) {
-        console.warn("[Studio] Standard render checks failed. Checking for audio-codec limitations...");
-
-        const hasAudioIssue = renderCheck.issues.some(
-          (issue) =>
-            issue.type === "audio-codec-unsupported" ||
-            issue.message.toLowerCase().includes("audio")
-        ) || (typeof window !== "undefined" && !("AudioEncoder" in window));
-
-        if (hasAudioIssue) {
-          console.log("[Studio] Browser lacks native AudioEncoder. Attempting muted rendering...");
-          const mutedCheck = await canRenderMediaOnWeb({
-            container: "mp4",
-            videoCodec: "h264",
-            width: aspectW,
-            height: aspectH,
-            muted: true,
-          });
-
-          if (mutedCheck.canRender) {
-            isMuted = true;
-            console.log("[Studio] Muted render is supported. Audio will be restored post-render via FFmpeg.");
-          } else {
-            const errorMsg = mutedCheck.issues.map((i) => i.message).join(", ") || "Client-side video encoding is not supported in this browser.";
-            throw new Error(errorMsg);
-          }
-        } else {
-          const errorMsg = renderCheck.issues.map((i) => i.message).join(", ") || "Client-side rendering is not supported.";
-          throw new Error(errorMsg);
-        }
-      }
-
-      setStatusMessage("Rendering frames (GPU accelerated)…");
-
-      // 2. Perform ultra-fast client-side rendering with JPEG encoding and parallel worker concurrency
-      const exportSrc = originalVideoUrl || videoUrl || "";
-      const concurrency = typeof navigator !== "undefined" && navigator.hardwareConcurrency
-        ? Math.min(navigator.hardwareConcurrency, 8)
-        : 4;
-
-      const { getBlob } = await renderMediaOnWeb({
-        composition: {
-          id: "snipcaptions",
-          component: CaptionComposition as never,
-          durationInFrames,
-          fps: FPS,
-          width: aspectW,
-          height: aspectH,
-        } as never,
-        inputProps: {
-          src: exportSrc,
-          words,
-          theme: captionTheme,
-          accentColor: accent,
-          position: captionPosition,
-          scale: captionScale,
-          customFontFamily,
-          mutedVideo: isMuted,
-        },
-        container: "mp4",
-        videoBitrate: "medium",
-        audioBitrate: "medium",
-        hardwareAcceleration: "prefer-hardware",
-        mediaCacheSizeInBytes: 512 * 1024 * 1024,
-        muted: isMuted,
-        delayRenderTimeoutInMilliseconds: 80000,
-        signal: controller.signal,
-        onProgress: (p: unknown) => {
-          const value = typeof p === "number" ? p : (p as { progress: number }).progress || 0;
-          setProgress(value);
+        fps: 60,
+        durationInSeconds,
+        onProgress: (p) => {
+          setProgress(p.progress);
+          setStatusMessage(p.stage);
         },
       });
-
-      const blob = await getBlob();
-      let finalBlob = blob;
-      let audioMuxSuccess = false;
-
-      // 3. Mux audio on Safari/iOS using FFmpeg WASM if the render had to be muted
-      if (isMuted && videoFile) {
-        console.log("[Studio] Muted render complete. Restoring audio track using same-origin FFmpeg WASM...");
-        setStatusMessage("Muxing audio track (FFmpeg)…");
-        setProgress(0);
-
-        try {
-          const { FFmpeg } = await import("@ffmpeg/ffmpeg");
-          const { fetchFile, toBlobURL } = await import("@ffmpeg/util");
-          const ffmpeg = new FFmpeg();
-
-          ffmpeg.on("log", ({ message }) => {
-            console.log("[FFmpeg:audio-restore]", message);
-          });
-
-          const baseURL = "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
-          await ffmpeg.load({
-            coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-            wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
-          });
-
-          await ffmpeg.writeFile("muted.mp4", await fetchFile(blob));
-          await ffmpeg.writeFile("original.mp4", await fetchFile(videoFile));
-
-          // Run stream copy muxing (instant, no transcoding)
-          await ffmpeg.exec([
-            "-i", "muted.mp4",
-            "-i", "original.mp4",
-            "-map", "0:v",
-            "-map", "1:a",
-            "-c", "copy",
-            "output.mp4"
-          ]);
-
-          const data = await ffmpeg.readFile("output.mp4");
-          if (data instanceof Uint8Array) {
-            finalBlob = new Blob([data as unknown as BlobPart], { type: "video/mp4" });
-            console.log("[Studio] Audio restoration completed successfully!");
-            audioMuxSuccess = true;
-          }
-
-          // Clean up MEMFS
-          try { await ffmpeg.deleteFile("muted.mp4"); } catch {}
-          try { await ffmpeg.deleteFile("original.mp4"); } catch {}
-          try { await ffmpeg.deleteFile("output.mp4"); } catch {}
-
-        } catch (ffmpegErr) {
-          console.error("[Studio] Audio restoration failed, falling back to muted video", ffmpegErr);
-        }
-      }
 
       const url = URL.createObjectURL(finalBlob);
       const a = document.createElement("a");
@@ -720,28 +806,12 @@ export function Studio() {
 
       setProgress(1);
       setStatusMessage("Export complete!");
-
-      if (isMuted) {
-        if (audioMuxSuccess) {
-          setToast({
-            type: "success",
-            message: "Video exported successfully with audio restored!",
-          });
-        } else {
-          setToast({
-            type: "warning",
-            message: "Video exported without audio due to iOS Safari constraints.",
-          });
-        }
-      } else {
-        setToast({
-          type: "success",
-          message: "Video exported successfully with frame-accurate captions!",
-        });
-      }
-
+      setToast({
+        type: "success",
+        message: "Video exported in record time using GPU WebCodecs!",
+      });
     } catch (e) {
-      console.error("[Studio] Native export error", e);
+      console.error("[Studio] WebCodecs export error", e);
       setStatusMessage(e instanceof Error ? e.message : "Export failed");
       setToast({
         type: "error",
@@ -795,17 +865,12 @@ export function Studio() {
 
   return (
     <div className="flex h-[calc(100vh-108px)] w-full flex-col overflow-hidden bg-[#0A0A0C]">
-      {/* Studio Header Toolbar */}
+      {/* banner ads area */}
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-white/[0.06] bg-[#121214] px-4 sm:px-5">
         <div className="flex items-center gap-2">
           <span className="text-[13px] font-semibold text-white/90">
-            <span className="hidden sm:inline">Video </span>Studio
+            <span className="hidden sm:inline"></span>
           </span>
-          {naturalAspect && (
-            <span className="rounded-md bg-white/[0.06] px-2 py-0.5 text-[10px] font-mono text-white/50 hidden xs:inline sm:inline">
-              {naturalAspect > 1 ? "16:9 Landscape" : naturalAspect < 0.9 ? "9:16 Portrait" : "1:1 Square"}
-            </span>
-          )}
         </div>
 
         {/* Action Controls */}
@@ -826,7 +891,7 @@ export function Studio() {
           </button>
 
           <button
-            onClick={() => setShowExportModal(true)}
+            onClick={() => handleExport("original")}
             disabled={exporting || !ready}
             title="Export Video with Captions"
             className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-[#2997FF] to-[#0066CC] px-3 py-1.5 sm:px-4 sm:py-1.5 text-[13px] font-semibold text-white shadow-lg shadow-[#2997FF]/25 transition-all disabled:opacity-40"
@@ -872,80 +937,22 @@ export function Studio() {
           )}
           <div className="flex flex-1 items-center justify-center p-3 sm:p-5 min-h-0 min-w-0">
             {ready ? (
-              <div
-                ref={playerContainerRef}
-                className="relative flex items-center justify-center overflow-hidden rounded-2xl bg-black border border-white/[0.08] shadow-2xl h-full w-full max-h-full max-w-full"
-                style={{
-                  aspectRatio: naturalAspect ? `${naturalAspect}` : undefined,
+              <PixiPlayer
+                ref={playerRef}
+                src={videoUrl || ""}
+                words={words}
+                theme={captionTheme}
+                accentColor={accent}
+                position={captionPosition}
+                scale={captionScale}
+                customFontFamily={customFontFamily}
+                durationInSeconds={durationInSeconds}
+                naturalAspect={naturalAspect}
+                onPositionClick={() => {
+                  playerRef.current?.pause();
+                  setActiveTab("settings");
                 }}
-              >
-                <Player
-                  ref={playerRef}
-                  component={CaptionComposition}
-                  inputProps={playerInputProps}
-                  durationInFrames={durationInFrames}
-                  fps={FPS}
-                  compositionWidth={previewWidth}
-                  compositionHeight={previewHeight}
-                  controls
-                  loop
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    transform: "translate3d(0, 0, 0)",
-                    backfaceVisibility: "hidden",
-                    willChange: "transform",
-                  }}
-                  acknowledgeRemotionLicense
-                />
-
-                {/* Proxy generation progress pill — visible while FFmpeg transcodes the 480p preview */}
-                {proxyStatus === "generating" && (
-                  <div
-                    className="absolute bottom-14 left-3 z-30 flex items-center gap-2 rounded-full border border-white/10 bg-black/70 px-3 py-1.5 shadow-lg backdrop-blur-md"
-                    style={{ animation: "fadeInUp 0.3s ease" }}
-                  >
-                    {/* Spinning ring */}
-                    <svg
-                      className="h-3.5 w-3.5 shrink-0 animate-spin text-[#2997FF]"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                    >
-                      <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                    <span className="text-[11px] font-medium text-white/80">
-                      Optimizing preview…
-                    </span>
-                  </div>
-                )}
-
-                {/* Invisible clickable captions hotspot (Active both playing and paused) */}
-                {playerDims.width > 0 && playerDims.height > 0 && (
-                  <div
-                    className="absolute inset-0 z-20 pointer-events-none"
-                    style={{ height: playerDims.height - 50 }}
-                  >
-                    <div
-                      onClick={() => {
-                        if (playerRef.current?.isPlaying()) {
-                          playerRef.current.pause();
-                        }
-                        setActiveTab("settings");
-                      }}
-                      className="absolute cursor-pointer pointer-events-auto"
-                      style={{
-                        left: `${captionPosition.x}%`,
-                        top: `${captionPosition.y}%`,
-                        transform: `translate(-50%, -50%) scale(${captionScale})`,
-                        width: "80%",
-                        maxWidth: "340px",
-                        height: "64px",
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
+              />
             ) : (
               <div className="flex flex-col items-center justify-center text-white/30">
                 <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -1021,65 +1028,7 @@ export function Studio() {
                       </div>
 
                       <div className="flex h-16 w-full items-center justify-center rounded-xl bg-black/60 border border-white/[0.04] p-2 overflow-hidden">
-                        {/* Live animated previews for kinetic/dramatic themes */}
-                        {ANIMATED_THEMES.has(t.id) && (
-                          <AnimatedPreview themeId={t.id} accent={accent} />
-                        )}
-                        {t.id === "kinetic_01" && (
-                          <AnimatedPreview themeId="kinetic_01" accent={accent} />
-                        )}
-                        {/* Static previews for clean themes */}
-                        {t.id === "black_punch" && (
-                          <div className="text-center leading-none">
-                            <div className="text-[9px] text-white/30 uppercase">THE QUICK</div>
-                            <div className="text-[15px] font-black uppercase mt-1" style={{ color: "#000000", WebkitTextStroke: "0.5px rgba(255,255,255,0.8)" }}>BROWN</div>
-                          </div>
-                        )}
-                        {t.id === "liquid_glass" && (
-                          <div
-                            className="text-[11px] font-medium"
-                            style={{
-                              background: "rgba(255,255,255,0.1)",
-                              border: "1px solid rgba(255,255,255,0.2)",
-                              borderRadius: "20px",
-                              padding: "4px 12px",
-                              display: "inline-flex",
-                              gap: "4px",
-                            }}
-                          >
-                            <span className="text-white/40">the</span>
-                            <span className="font-bold" style={{ color: accent }}>quick</span>
-                            <span className="text-white/40">fox</span>
-                          </div>
-                        )}
-                        {t.id === "one_word" && (
-                          <div className="text-center leading-none font-bold">
-                            <span className="text-[16px] uppercase tracking-wide" style={{ color: accent }}>BROWN</span>
-                          </div>
-                        )}
-                        {t.id === "minimal_blur_blend" && (
-                          <div className="text-left leading-none space-y-0.5">
-                            <div className="text-[10px] text-white/70" style={{ fontFamily: '"Celosia Nature", cursive' }}>the quick</div>
-                            <div className="text-[16px] font-black uppercase text-white" style={{ fontFamily: '"Helvetica Bold", sans-serif' }}>BROWN</div>
-                          </div>
-                        )}
-                        {/* Generic text preview for remaining themes */}
-                        {!ANIMATED_THEMES.has(t.id) && t.id !== "kinetic_01" && t.id !== "black_punch" && t.id !== "liquid_glass" && t.id !== "one_word" && t.id !== "minimal_blur_blend" && (
-                          <p
-                            className="text-[15px] font-extrabold tracking-tight"
-                            style={{
-                              color: t.id === "clean" ? "#ffffff" : accent,
-                              fontFamily:
-                                t.id === "clean" || t.id === "highlight"
-                                  ? "var(--font-display)"
-                                  : "var(--font-creative)",
-                              textShadow:
-                                t.id === "neon" ? `0 0 10px ${accent}, 0 0 22px ${accent}` : undefined,
-                            }}
-                          >
-                            the quick <span style={{ color: accent }}>BROWN</span>
-                          </p>
-                        )}
+                        <AnimatedPreview themeId={t.id} themeAccent={t.accent} />
                       </div>
                     </button>
                   );
@@ -1131,41 +1080,11 @@ export function Studio() {
                     </label>
                   </div>
                 </div>
-
-                {/* Recently Used Colors Batch (Apple Style) */}
-                {recentColors.length > 0 && (
-                  <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-white/40">
-                        Recently Used
-                      </span>
-                      <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] font-mono text-white/40">
-                        {recentColors.length} saved
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {recentColors.map((c, i) => (
-                        <button
-                          key={`${c}-${i}`}
-                          onClick={() => setCustomAccentColor(c)}
-                          className={`h-7 w-7 rounded-full border-2 transition-transform duration-150 ${
-                            accent.toLowerCase() === c.toLowerCase()
-                              ? "scale-110 border-white shadow-lg ring-2 ring-[#2997FF]"
-                              : "border-white/10 opacity-80 hover:opacity-100 hover:scale-105"
-                          }`}
-                          style={{ background: c }}
-                          title={c}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Font Selector / Font Pair Feature */}
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <label className="text-[11px] font-bold uppercase tracking-wider text-white/40">
-                      Typography / Emotions
+                      Typography
                     </label>
                     {customFontFamily && (
                       <button
@@ -1263,10 +1182,7 @@ export function Studio() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[11px] font-bold uppercase tracking-wider text-white/40">
-                    Transcribed Words ({words.length})
-                  </span>
-                  <span className="text-[10px] text-white/30">
-                    Click word to edit
+                    Transcribed Words :
                   </span>
                 </div>
                 <div className="space-y-1.5 max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
@@ -1329,15 +1245,6 @@ export function Studio() {
           </button>
         </div>
       )}
-
-      {/* Export Options Resolution Modal */}
-      <ExportResolutionModal
-        open={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        originalWidth={originalWidth}
-        originalHeight={originalHeight}
-        onProceed={handleExport}
-      />
     </div>
   );
 }

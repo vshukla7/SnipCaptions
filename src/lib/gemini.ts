@@ -1,5 +1,6 @@
 import { GoogleGenAI, type GenerateContentConfig, type Part } from "@google/genai";
 import type { TranscriptionResult, Word } from "./types";
+import { extractAudio16kHzMonoWav } from "./audioExtractor";
 
 export const GEMINI_MODEL = "gemini-3.6-flash";
 
@@ -149,11 +150,31 @@ export async function transcribeVideo({
 }: TranscribeOptions): Promise<TranscriptionResult> {
   const ai = new GoogleGenAI({ apiKey });
 
-  onStatus?.("Uploading media…");
-  onProgress?.({ progress: 0.05, words: 0 });
-  onProgress?.({ progress: 0.10, words: 0 });
-  const uploaded = await ai.files.upload({ file });
-  onProgress?.({ progress: 0.25, words: 0 });
+  let fileToUpload: File = file;
+
+  // If input file is a video, extract 16kHz mono audio payload via native Web Audio API
+  if (file.type.startsWith("video/") || !file.name.toLowerCase().endsWith(".wav")) {
+    onStatus?.("Extracting audio payload (Web Audio)…");
+    onProgress?.({ progress: 0.05, words: 0 });
+
+    try {
+      const extracted = await extractAudio16kHzMonoWav(file, `${file.name.replace(/\.[^/.]+$/, "")}_16khz.wav`, (p) => {
+        onProgress?.({ progress: 0.05 + p.progress * 0.1, words: 0 });
+      });
+      fileToUpload = extracted.file;
+      if (!durationSeconds || durationSeconds === 0) {
+        durationSeconds = extracted.duration;
+      }
+    } catch (audioErr) {
+      console.warn("[transcribeVideo] Web Audio extraction failed, falling back to original file:", audioErr);
+      fileToUpload = file;
+    }
+  }
+
+  onStatus?.("Uploading audio…");
+  onProgress?.({ progress: 0.18, words: 0 });
+  const uploaded = await ai.files.upload({ file: fileToUpload });
+  onProgress?.({ progress: 0.30, words: 0 });
 
   try {
     const parts: Part[] = [
@@ -172,8 +193,8 @@ export async function transcribeVideo({
       temperature: 0.0, // Zero temperature for maximum deterministic audio alignment precision
     };
 
-    onStatus?.("Processing audio…");
-    onProgress?.({ progress: 0.35, words: 0 });
+    onStatus?.("Processing audio with Gemini…");
+    onProgress?.({ progress: 0.40, words: 0 });
     let acc = "";
     let lastWordCount = 0;
     const startTime = Date.now();
@@ -183,7 +204,7 @@ export async function transcribeVideo({
       config,
     });
 
-    onStatus?.("Transcribing…");
+    onStatus?.("Transcribing & aligning words…");
     for await (const chunk of stream) {
       acc += chunk.text ?? "";
       const words = (acc.match(/"word"\s*:/g) ?? []).length;
@@ -192,8 +213,8 @@ export async function transcribeVideo({
       }
       const elapsed = (Date.now() - startTime) / 1000;
       const estimatedDuration = durationSeconds ?? 30;
-      const timeProgress = Math.min(0.90, 0.40 + (elapsed / Math.max(estimatedDuration * 3, 10)) * 0.55);
-      const contentProgress = Math.min(0.95, 0.40 + (words / Math.max(estimatedDuration * 2, 10)) * 0.55);
+      const timeProgress = Math.min(0.92, 0.45 + (elapsed / Math.max(estimatedDuration * 2, 8)) * 0.5);
+      const contentProgress = Math.min(0.96, 0.45 + (words / Math.max(estimatedDuration * 2, 8)) * 0.5);
       onProgress?.({
         progress: Math.max(timeProgress, contentProgress),
         words,
@@ -209,7 +230,7 @@ export async function transcribeVideo({
 
     if (!parsed.words || parsed.words.length === 0) {
       throw new Error(
-        "Gemini returned no words. Try a clearer audio clip or a different language.",
+        "Gemini returned no words. Try a clearer audio clip or select a different language.",
       );
     }
 

@@ -29,21 +29,43 @@ export function GoogleAdsenseUnit({
   const adRef = useRef<HTMLModElement | null>(null);
 
   useEffect(() => {
-    // Wait a tick to ensure the DOM has updated and the ins tag is fully attached
-    const timer = setTimeout(() => {
-      try {
-        if (adRef.current) {
-          const hasStatus = adRef.current.hasAttribute("data-adsbygoogle-status");
-          if (!hasStatus) {
-            (window.adsbygoogle = window.adsbygoogle || []).push({});
+    let initialized = false;
+    const currentRef = adRef.current;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (entry.isIntersecting && !initialized && currentRef) {
+          const width = currentRef.offsetWidth || currentRef.parentElement?.offsetWidth || 0;
+          if (width > 0) {
+            try {
+              const hasStatus = currentRef.hasAttribute("data-adsbygoogle-status");
+              if (!hasStatus) {
+                (window.adsbygoogle = window.adsbygoogle || []).push({});
+              }
+              initialized = true;
+              observer.disconnect();
+            } catch (err) {
+              console.warn("[GoogleAdsenseUnit] Error initializing ad unit:", err);
+            }
           }
         }
-      } catch (err) {
-        console.warn("[GoogleAdsenseUnit] Error initializing ad unit:", err);
-      }
-    }, 50);
+      },
+      { threshold: 0 }
+    );
 
-    return () => clearTimeout(timer);
+    let timer: NodeJS.Timeout;
+    if (currentRef) {
+      // Small delay to let React layout settle before observing
+      timer = setTimeout(() => {
+        observer.observe(currentRef);
+      }, 50);
+    }
+
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+    };
   }, [slotId]);
 
   return (
