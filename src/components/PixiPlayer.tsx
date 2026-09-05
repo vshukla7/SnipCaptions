@@ -142,7 +142,7 @@ export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function Pi
     };
   }, []);
 
-  // Update caption rendering config on prop change
+  // Update caption rendering config on prop change (without triggering re-runs on time ticks)
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
@@ -162,9 +162,11 @@ export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function Pi
     });
 
     // Re-render current frame immediately (even when paused)
-    const t = videoRef.current ? videoRef.current.currentTime : currentTime;
+    const t = videoRef.current ? videoRef.current.currentTime : 0;
     renderer.renderTime(t);
-  }, [words, theme, accentColor, position, scale, customFontFamily, naturalAspect, currentTime]);
+  }, [words, theme, accentColor, position, scale, customFontFamily, naturalAspect]);
+
+  const lastStateUpdateTimeRef = useRef<number>(0);
 
   // 60 FPS Animation & Caption Sync Loop
   const tick = useCallback((timestamp: DOMHighResTimeStamp) => {
@@ -173,10 +175,19 @@ export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function Pi
 
     if (video) {
       const time = video.currentTime;
-      setCurrentTime(time);
+      
+      // Direct high-performance GPU caption render (zero React state overhead)
       if (renderer) {
         renderer.renderTime(time);
       }
+
+      // Throttle React state updates during playback to ~10 FPS (every 100ms)
+      // to eliminate main-thread CPU thrashing and frame drops on mobile devices.
+      if (timestamp - lastStateUpdateTimeRef.current > 100) {
+        lastStateUpdateTimeRef.current = timestamp;
+        setCurrentTime(time);
+      }
+
       if (!video.paused) {
         animFrameIdRef.current = requestAnimationFrame(tick);
       }
@@ -213,6 +224,7 @@ export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function Pi
       animFrameIdRef.current = null;
     }
     const t = videoRef.current ? videoRef.current.currentTime : currentTime;
+    setCurrentTime(t);
     rendererRef.current?.renderTime(t);
   };
 

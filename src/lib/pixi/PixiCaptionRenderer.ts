@@ -108,7 +108,7 @@ export class PixiCaptionRenderer {
     this.initPromise = (async () => {
       await preloadAllFonts();
 
-      const maxDim = 4096;
+      const maxDim = 2048;
       let targetW = width;
       let targetH = height;
       if (targetW > maxDim || targetH > maxDim) {
@@ -161,7 +161,7 @@ export class PixiCaptionRenderer {
         glCanvas.addEventListener("webglcontextrestored", () => {
           console.log("[PixiCaptionRenderer] WebGL Context restored. Re-rendering stage.");
           if (this.currentConfig) {
-            this.updateConfig(this.currentConfig);
+            this.renderTime(0, this.currentConfig);
           }
         });
       }
@@ -178,7 +178,7 @@ export class PixiCaptionRenderer {
 
   public resize(width: number, height: number): void {
     if (!this.app || !this.isInitialized) return;
-    const maxDim = 4096;
+    const maxDim = 2048;
     let targetW = width;
     let targetH = height;
     if (targetW > maxDim || targetH > maxDim) {
@@ -186,6 +186,7 @@ export class PixiCaptionRenderer {
       targetW = Math.round(targetW * s);
       targetH = Math.round(targetH * s);
     }
+    if (this.width === targetW && this.height === targetH) return;
     this.width = targetW;
     this.height = targetH;
     this.app.renderer.resize(targetW, targetH);
@@ -193,7 +194,7 @@ export class PixiCaptionRenderer {
 
   public updateConfig(config: CaptionRendererConfig): void {
     this.currentConfig = config;
-    if (config.width !== this.width || config.height !== this.height) {
+    if (Math.abs(config.width - this.width) > 2 || Math.abs(config.height - this.height) > 2) {
       this.resize(config.width, config.height);
     }
   }
