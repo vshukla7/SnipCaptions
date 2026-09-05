@@ -756,9 +756,7 @@ export function Studio() {
     const aspectH = Math.max(2, Math.round((renderHeight * exportScale) / 2) * 2);
 
     try {
-      console.log(
-        `[Studio:export] Starting hardware-accelerated video export (${aspectW}x${aspectH}${isLowEndDevice ? ", low-end 1080p cap" : ", original resolution"})...`,
-      );
+      console.log(`[Studio:export] Starting export (${aspectW}x${aspectH}${isLowEndDevice ? ", low-end 1080p cap" : ", original resolution"})`);
 
       const exportSrc = originalVideoUrl || videoUrl || "";
       const exportFile = videoFile || new Blob([], { type: "video/mp4" });
@@ -817,13 +815,13 @@ export function Studio() {
     const srtLines: string[] = [];
     const maxWordsPerSrtLine = 4;
     let sequence = 1;
-    
     for (let i = 0; i < words.length; i += maxWordsPerSrtLine) {
       const chunk = words.slice(i, i + maxWordsPerSrtLine);
+
       const start = chunk[0].start;
       const end = chunk[chunk.length - 1].end;
       const text = chunk.map(w => w.word).join(" ");
-      
+
       const formatTime = (seconds: number) => {
         const hrs = Math.floor(seconds / 3600);
         const mins = Math.floor((seconds % 3600) / 60);
@@ -831,14 +829,14 @@ export function Studio() {
         const ms = Math.floor((seconds % 1) * 1000);
         return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")},${String(ms).padStart(3, "0")}`;
       };
-      
+
       srtLines.push(`${sequence}`);
       srtLines.push(`${formatTime(start)} --> ${formatTime(end)}`);
       srtLines.push(text);
       srtLines.push("");
       sequence++;
     }
-    
+
     const content = srtLines.join("\n");
     const blob = new Blob([content], { type: "text/srt;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -861,12 +859,12 @@ export function Studio() {
       onDownloadSRT: () => downloadSRTRef.current(),
       onExport: () => exportVideoRef.current(),
     });
-
     return () => setStudioActions(null);
   }, [setStudioActions]);
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-[#0A0A0C]">
+
       {/* Main Studio View (Remotion Player + Right Sidebar) */}
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
         {/* Left: Player Viewport */}
@@ -1193,6 +1191,7 @@ export function Studio() {
           </button>
         </div>
       )}
+
     </div>
   );
 }

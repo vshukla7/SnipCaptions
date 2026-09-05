@@ -6,15 +6,7 @@ import { ApiKeyModal } from "./ApiKeyModal";
 import { SetupGuideModal } from "./SetupGuideModal";
 
 export function Header() {
-  const {
-    hasApiKey,
-    status,
-    progress,
-    reset,
-    transcription,
-    openDemoStudio,
-    studioActions,
-  } = useApp();
+  const { hasApiKey, status, progress, reset, transcription, openDemoStudio, studioActions } = useApp();
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const [guideModalOpen, setGuideModalOpen] = useState(false);
 
@@ -33,11 +25,11 @@ export function Header() {
               by ayphic
             </span>
           </div>
-          {showStudio && (
+          {/* {showStudio && (
             <span className="hidden md:inline-block rounded-full bg-[#2997FF]/10 px-2.5 py-0.5 text-[11px] font-semibold text-[#2997FF] border border-[#2997FF]/20">
               Studio Mode
             </span>
-          )}
+          )} */}
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-3">
@@ -84,7 +76,7 @@ export function Header() {
                   <>
                     <svg className="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1-8-8v8H4z" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                     </svg>
                     <span>{Math.round(progress * 100)}%</span>
                   </>
@@ -111,29 +103,27 @@ export function Header() {
             </button>
           )}
 
-          {!showStudio && (
-            <button
-              onClick={() => setApiKeyModalOpen(true)}
-              className="rounded-full px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 text-[12px] font-semibold transition-all duration-200"
-              style={{
-                background: hasApiKey ? "rgba(48,209,88,0.12)" : "rgba(255,255,255,0.06)",
-                color: hasApiKey ? "#30D158" : "#8E8E93",
-                border: `1px solid ${hasApiKey ? "rgba(48,209,88,0.25)" : "rgba(255,255,255,0.08)"}`,
-              }}
-            >
-              {hasApiKey ? (
-                <>
-                  <span className="hidden sm:inline">✓ API Connected</span>
-                  <span className="sm:hidden">✓ Connected</span>
-                </>
-              ) : (
-                <>
-                  <span className="hidden sm:inline">Add API Key</span>
-                  <span className="sm:hidden">Add Key</span>
-                </>
-              )}
-            </button>
-          )}
+          {!showStudio && <button
+            onClick={() => setApiKeyModalOpen(true)}
+            className="rounded-full px-2.5 py-1.5 sm:px-3.5 sm:py-1.5 text-[12px] font-semibold transition-all duration-200"
+            style={{
+              background: hasApiKey ? "rgba(48,209,88,0.12)" : "rgba(255,255,255,0.06)",
+              color: hasApiKey ? "#30D158" : "#8E8E93",
+              border: `1px solid ${hasApiKey ? "rgba(48,209,88,0.25)" : "rgba(255,255,255,0.08)"}`,
+            }}
+          >
+            {hasApiKey ? (
+              <>
+                <span className="hidden sm:inline">✓ API Connected</span>
+                <span className="sm:hidden">✓ Connected</span>
+              </>
+            ) : (
+              <>
+                <span className="hidden sm:inline">Add API Key</span>
+                <span className="sm:hidden">Add Key</span>
+              </>
+            )}
+          </button>}
         </div>
       </div>
 

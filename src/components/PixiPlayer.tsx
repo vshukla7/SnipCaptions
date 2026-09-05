@@ -98,9 +98,25 @@ export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function Pi
     const renderer = new PixiCaptionRenderer();
     rendererRef.current = renderer;
 
+    const getPreviewCanvasDims = () => {
+      const isMobile = typeof window !== "undefined" && (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768);
+      const baseShort = isMobile ? 360 : 540; // Downscaled preview resolution: 540p desktop, 360p mobile (75% less GPU load)
+      const aspect = naturalAspect && naturalAspect > 0 ? naturalAspect : 9 / 16;
+      if (aspect > 1) {
+        return {
+          w: Math.round(baseShort * aspect),
+          h: baseShort,
+        };
+      } else {
+        return {
+          w: baseShort,
+          h: Math.round(baseShort / aspect),
+        };
+      }
+    };
+
     const initRenderer = async () => {
-      const w = 1080;
-      const h = naturalAspect && naturalAspect > 1 ? Math.round(1080 / naturalAspect) : 1920;
+      const { w, h } = getPreviewCanvasDims();
       await renderer.init(w, h);
       if (!mounted || !canvasContainerRef.current) {
         renderer.destroy();
@@ -142,13 +158,16 @@ export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function Pi
     };
   }, []);
 
-  // Update caption rendering config on prop change
+  // Update caption rendering config on prop change (without triggering re-runs on time ticks)
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
 
-    const w = 1080;
-    const h = naturalAspect && naturalAspect > 1 ? Math.round(1080 / naturalAspect) : 1920;
+    const isMobile = typeof window !== "undefined" && (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768);
+    const baseShort = isMobile ? 360 : 540;
+    const aspect = naturalAspect && naturalAspect > 0 ? naturalAspect : 9 / 16;
+    const w = aspect > 1 ? Math.round(baseShort * aspect) : baseShort;
+    const h = aspect > 1 ? baseShort : Math.round(baseShort / aspect);
 
     renderer.updateConfig({
       width: w,
@@ -162,21 +181,37 @@ export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function Pi
     });
 
     // Re-render current frame immediately (even when paused)
-    const t = videoRef.current ? videoRef.current.currentTime : currentTime;
+    const t = videoRef.current ? videoRef.current.currentTime : 0;
     renderer.renderTime(t);
-  }, [words, theme, accentColor, position, scale, customFontFamily, naturalAspect, currentTime]);
+  }, [words, theme, accentColor, position, scale, customFontFamily, naturalAspect]);
 
-  // 60 FPS Animation & Caption Sync Loop
+  const lastRenderFrameTimeRef = useRef<number>(0);
+  const lastStateUpdateTimeRef = useRef<number>(0);
+
+  // 24 FPS Preview Sync Loop (1000 / 24 = ~41.67ms interval)
+  const PREVIEW_FPS_INTERVAL = 1000 / 24;
+
   const tick = useCallback((timestamp: DOMHighResTimeStamp) => {
     const video = videoRef.current;
     const renderer = rendererRef.current;
 
     if (video) {
       const time = video.currentTime;
-      setCurrentTime(time);
-      if (renderer) {
-        renderer.renderTime(time);
+
+      // Throttle GPU caption render to 24 FPS (cinematic preview speed)
+      if (timestamp - lastRenderFrameTimeRef.current >= PREVIEW_FPS_INTERVAL) {
+        lastRenderFrameTimeRef.current = timestamp;
+        if (renderer) {
+          renderer.renderTime(time);
+        }
       }
+
+      // Throttle React UI state updates during playback to ~10 FPS (every 100ms)
+      if (timestamp - lastStateUpdateTimeRef.current > 100) {
+        lastStateUpdateTimeRef.current = timestamp;
+        setCurrentTime(time);
+      }
+
       if (!video.paused) {
         animFrameIdRef.current = requestAnimationFrame(tick);
       }
@@ -188,12 +223,15 @@ export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function Pi
       const delta = (timestamp - lastFrameTimeRef.current) / 1000;
       lastFrameTimeRef.current = timestamp;
 
-      setCurrentTime((prev) => {
-        let newTime = prev + delta;
-        if (duration > 0 && newTime >= duration) newTime = 0; // loop
-        if (renderer) renderer.renderTime(newTime);
-        return newTime;
-      });
+      if (timestamp - lastRenderFrameTimeRef.current >= PREVIEW_FPS_INTERVAL) {
+        lastRenderFrameTimeRef.current = timestamp;
+        setCurrentTime((prev) => {
+          let newTime = prev + delta;
+          if (duration > 0 && newTime >= duration) newTime = 0; // loop
+          if (renderer) renderer.renderTime(newTime);
+          return newTime;
+        });
+      }
 
       animFrameIdRef.current = requestAnimationFrame(tick);
     }
@@ -213,6 +251,7 @@ export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function Pi
       animFrameIdRef.current = null;
     }
     const t = videoRef.current ? videoRef.current.currentTime : currentTime;
+    setCurrentTime(t);
     rendererRef.current?.renderTime(t);
   };
 
@@ -319,6 +358,10 @@ export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function Pi
       <div
         ref={canvasContainerRef}
         className="pointer-events-none absolute inset-0 z-10 h-full w-full"
+        style={{
+          transform: "translateZ(0)",
+          willChange: "transform",
+        }}
       />
 
       {/* 3. Interactive Caption Click Hotspot */}
