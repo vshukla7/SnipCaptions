@@ -156,7 +156,16 @@ export class PixiCaptionRenderer {
       if (glCanvas && glCanvas.addEventListener) {
         glCanvas.addEventListener("webglcontextlost", (e) => {
           e.preventDefault();
-          console.warn("[PixiCaptionRenderer] WebGL Context Lost detected. Waiting for restore...");
+          console.warn("[PixiCaptionRenderer] WebGL Context Lost detected. Recovering...");
+          setTimeout(() => {
+            try {
+              const gl = (this.app?.renderer as { gl?: WebGLRenderingContext })?.gl;
+              const loseContext = gl?.getExtension?.("WEBGL_lose_context");
+              if (loseContext) {
+                loseContext.restoreContext();
+              }
+            } catch {}
+          }, 200);
         });
         glCanvas.addEventListener("webglcontextrestored", () => {
           console.log("[PixiCaptionRenderer] WebGL Context restored. Re-rendering stage.");
@@ -293,7 +302,26 @@ export class PixiCaptionRenderer {
     }
   }
 
+  private destroyContainerChildren(container: Container): void {
+    if (!container || !container.children) return;
+    while (container.children.length > 0) {
+      const child = container.removeChildAt(0);
+      if (child) {
+        if ((child as Container).children && (child as Container).children.length > 0) {
+          this.destroyContainerChildren(child as Container);
+        }
+        try {
+          child.destroy({ children: true, texture: true });
+        } catch {
+          /* ignore if already destroyed */
+        }
+      }
+    }
+  }
+
   // ────────────────────────────────────────────────────────────────────────
+
+  private lastRenderedTime = -1;
 
   public renderTime(time: number, config?: CaptionRendererConfig): void {
     if (config) {
@@ -306,9 +334,16 @@ export class PixiCaptionRenderer {
     // current video element frame before compositing captions on top.
     this.updateVideoFrame();
 
+    // Skip redundant identical renders when video is paused and time has not changed
+    if (time === this.lastRenderedTime && !config && !this.videoSprite) {
+      return;
+    }
+    this.lastRenderedTime = time;
+
     const { words, theme, accentColor, position, scale, customFontFamily, maxWordsPerLine = 3 } = cfg;
 
-    this.captionContainer.removeChildren();
+    // Explicitly destroy previous frame's GPU textures to prevent VRAM memory leaks & GC lag spikes
+    this.destroyContainerChildren(this.captionContainer);
 
     if (!words || words.length === 0) {
       try { this.app.render(); } catch {}
@@ -402,6 +437,15 @@ export class PixiCaptionRenderer {
         if (this.app.ticker) {
           this.app.ticker.stop();
         }
+        // Force browser to release WebGL context extension slot
+        try {
+          const gl = (this.app.renderer as { gl?: WebGLRenderingContext })?.gl;
+          const loseContext = gl?.getExtension?.("WEBGL_lose_context");
+          if (loseContext) {
+            loseContext.loseContext();
+          }
+        } catch {}
+
         this.app.destroy(false, { children: true });
         this.app = null;
       }
