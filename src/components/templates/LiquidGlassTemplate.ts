@@ -35,10 +35,15 @@ export function renderLiquidGlassTheme(ctx: PixiThemeContext) {
   const pillHeight = Math.round(fontSize * 1.6);
   const pillWidth = currentX + pillPaddingX * 2 - spacing;
 
-  const bg = new Graphics();
-  bg.roundRect(-pillWidth / 2, -pillHeight / 2, pillWidth, pillHeight, pillHeight / 2);
-  bg.fill({ color: 0xffffff, alpha: 0.15 });
-  bg.stroke({ color: 0xffffff, alpha: 0.35, width: 1.5 });
+  const bg = ctx.getGraphicsNode("roundRect", {
+    x: -pillWidth / 2,
+    y: -pillHeight / 2,
+    width: pillWidth,
+    height: pillHeight,
+    radius: pillHeight / 2,
+    fill: { color: 0xffffff, alpha: 0.15 },
+    stroke: { color: 0xffffff, alpha: 0.35, width: 1.5 },
+  });
 
   container.addChild(bg);
   lineGroup.position.set(-currentX / 2 + spacing / 2, 0);

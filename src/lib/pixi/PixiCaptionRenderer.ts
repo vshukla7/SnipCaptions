@@ -10,7 +10,7 @@
  *   This eliminates the 2D-canvas intermediary and all GPU↔CPU round-trips during export.
  */
 
-import { Application, Container, Sprite, Texture, Text, TextStyle } from "pixi.js";
+import { Application, Container, Sprite, Texture, Text, TextStyle, Graphics } from "pixi.js";
 import type { CaptionPosition, CaptionThemeId, Word } from "../types";
 import { preloadAllFonts } from "../fontLoader";
 import { PIXI_THEMES } from "@/components/templates";
@@ -54,6 +54,55 @@ class TextNodeCache {
     
     this.inUse.add(textNode);
     return textNode;
+  }
+
+  public resetFrame(): void {
+    this.inUse.clear();
+  }
+}
+
+class GraphicsNodeCache {
+  private cache: Map<string, Graphics[]> = new Map();
+  private inUse: Set<Graphics> = new Set();
+
+  public getRoundRect(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+    fill?: { color?: any; alpha?: number },
+    stroke?: { color?: any; alpha?: number; width?: number }
+  ): Graphics {
+    const key = `rr_${Math.round(x)}_${Math.round(y)}_${Math.round(width)}_${Math.round(height)}_${Math.round(radius)}_${fill?.color ?? ""}_${fill?.alpha ?? ""}_${stroke?.color ?? ""}_${stroke?.alpha ?? ""}_${stroke?.width ?? ""}`;
+    let pool = this.cache.get(key);
+
+    if (!pool) {
+      pool = [];
+      this.cache.set(key, pool);
+    }
+
+    let graphicsNode = pool.find((n) => !this.inUse.has(n) && !n.destroyed);
+    if (!graphicsNode) {
+      graphicsNode = new Graphics();
+      graphicsNode.roundRect(x, y, width, height, radius);
+      if (fill) graphicsNode.fill(fill);
+      if (stroke) graphicsNode.stroke(stroke);
+      pool.push(graphicsNode);
+    } else {
+      graphicsNode.clear();
+      graphicsNode.roundRect(x, y, width, height, radius);
+      if (fill) graphicsNode.fill(fill);
+      if (stroke) graphicsNode.stroke(stroke);
+      graphicsNode.alpha = 1;
+      graphicsNode.rotation = 0;
+      graphicsNode.position.set(0, 0);
+      graphicsNode.scale.set(1);
+      graphicsNode.tint = 0xffffff;
+    }
+
+    this.inUse.add(graphicsNode);
+    return graphicsNode;
   }
 
   public resetFrame(): void {
@@ -127,6 +176,7 @@ export class PixiCaptionRenderer {
   public rootContainer: Container | null = null;
   public captionContainer: Container | null = null;
   private textCache = new TextNodeCache();
+  private graphicsCache = new GraphicsNodeCache();
   private isDirty = true;
 
   private width = 1080;
@@ -360,8 +410,8 @@ export class PixiCaptionRenderer {
         if ((child as Container).children && (child as Container).children.length > 0) {
           this.destroyContainerChildren(child as Container);
         }
-        // Do NOT destroy Text nodes, we pool them!
-        if (!(child instanceof Text)) {
+        // Do NOT destroy Text or Graphics nodes, we pool them!
+        if (!(child instanceof Text) && !(child instanceof Graphics)) {
           try {
             child.destroy({ children: false, texture: true });
           } catch {
@@ -397,9 +447,10 @@ export class PixiCaptionRenderer {
     const { words, theme, accentColor, position, scale, customFontFamily, maxWordsPerLine = 3 } = cfg;
 
     // Explicitly destroy previous frame's GPU textures to prevent VRAM memory leaks & GC lag spikes
-    // Text nodes are preserved in cache to prevent allocation churn.
+    // Text and Graphics nodes are preserved in cache to prevent allocation churn.
     this.destroyContainerChildren(this.captionContainer);
     this.textCache.resetFrame();
+    this.graphicsCache.resetFrame();
 
     if (!words || words.length === 0) {
       try { this.app.render(); } catch {}
@@ -467,9 +518,22 @@ export class PixiCaptionRenderer {
         customFontFamily,
         container: this.captionContainer,
         getTextNode: (text: string, style: any) => {
-          const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-          const res = Math.max(1, scale) * dpr;
+          const res = Math.max(1, scale);
           return this.textCache.get(text, style, res);
+        },
+        getGraphicsNode: (shape: "roundRect", params: any) => {
+          if (shape === "roundRect") {
+            return this.graphicsCache.getRoundRect(
+              params.x,
+              params.y,
+              params.width,
+              params.height,
+              params.radius,
+              params.fill,
+              params.stroke
+            );
+          }
+          return new Graphics();
         },
       });
     }

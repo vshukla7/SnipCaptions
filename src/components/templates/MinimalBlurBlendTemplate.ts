@@ -126,7 +126,7 @@ export function renderMinimalBlurBlendTheme(ctx: PixiThemeContext) {
     heroText.alpha = heroAlpha;
 
     if (blurAmount > 0.5) {
-      const blurFilter = new BlurFilter({ strength: blurAmount, quality: 3 });
+      const blurFilter = new BlurFilter({ strength: blurAmount, quality: 2 });
       heroText.filters = [blurFilter];
     }
 

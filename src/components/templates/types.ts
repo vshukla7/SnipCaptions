@@ -24,4 +24,16 @@ export interface PixiThemeContext {
   customFontFamily?: string | null;
   container: Container;
   getTextNode: (text: string, style: any) => import("pixi.js").Text;
+  getGraphicsNode: (
+    shape: "roundRect",
+    params: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      radius: number;
+      fill?: { color?: any; alpha?: number };
+      stroke?: { color?: any; alpha?: number; width?: number };
+    }
+  ) => import("pixi.js").Graphics;
 }

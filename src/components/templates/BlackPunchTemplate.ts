@@ -62,9 +62,14 @@ export function renderBlackPunchTheme(ctx: PixiThemeContext) {
       const pillWidth = wordWidth + padX * 2;
       const pillHeight = activeText.height + padY * 2;
 
-      const bg = new Graphics();
-      bg.roundRect(-pillWidth / 2, -pillHeight / 2, pillWidth, pillHeight, fontSize * 0.2);
-      bg.fill({ color: 0xffffff, alpha: 1.0 });
+      const bg = ctx.getGraphicsNode("roundRect", {
+        x: -pillWidth / 2,
+        y: -pillHeight / 2,
+        width: pillWidth,
+        height: pillHeight,
+        radius: fontSize * 0.2,
+        fill: { color: 0xffffff, alpha: 1.0 },
+      });
 
       const wordContainer = new Container();
       wordContainer.addChild(bg);
