@@ -401,13 +401,14 @@ async function runPlaybackCapture(params: {
       }
 
       let currentMediaTime = meta.mediaTime;
-      const mediaTimeUs = Math.round(currentMediaTime * 1_000_000);
+      let mediaTimeUs = Math.round(currentMediaTime * 1_000_000);
 
       // Ignore duplicate callbacks from browser compositor with loop breaker
       if (mediaTimeUs <= lastEncodedTimestampUs) {
         duplicateCount++;
         if (duplicateCount > 25) {
           currentMediaTime += 0.033;
+          mediaTimeUs = Math.round(currentMediaTime * 1_000_000);
           duplicateCount = 0;
         } else {
           video.requestVideoFrameCallback(captureFrame);
@@ -444,9 +445,13 @@ async function runPlaybackCapture(params: {
       pixiRenderer.renderTime(currentMediaTime, captionConfig);
 
       // ── Capture from WebGL canvas (GPU-resident, zero CPU copy) ──────────
+      const frameDuration = lastEncodedTimestampUs >= 0
+        ? Math.max(1, mediaTimeUs - lastEncodedTimestampUs)
+        : frameDurationUs;
+
       const videoFrame = new VideoFrame(pixiRenderer.canvas, {
-        timestamp: Math.round(currentMediaTime * 1_000_000),
-        duration: frameDurationUs,
+        timestamp: mediaTimeUs,
+        duration: frameDuration,
       });
 
       // ── Hardware H.264 encode ─────────────────────────────────────────────
@@ -454,7 +459,7 @@ async function runPlaybackCapture(params: {
       videoEncoder.encode(videoFrame, { keyFrame: isKeyframe });
       videoFrame.close();
 
-      lastEncodedTimestampUs = Math.round(currentMediaTime * 1_000_000);
+      lastEncodedTimestampUs = mediaTimeUs;
       capturedFrames++;
 
       if (capturedFrames % 6 === 0 || capturedFrames >= totalFrames) {
@@ -612,13 +617,9 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
     }
   }
 
-  // 5. Use one deterministic capture strategy for every device. Playback-rate
-  // throttling and adaptive FPS changes can shift video timestamps away from
-  // the original audio/caption timeline, so export always seeks to each exact
-  // output timestamp and waits for the decoded frame.
-  const tier: HardwareTier = "mid";
+  // 5. Detect hardware performance tier dynamically
+  const tier = await detectHardwareTier(width, height, fps, bitrate, videoCodec);
   onTierDetected?.(tier);
-  console.log("[ExportEngine] Accuracy-first capture: sequential decoded frames at 1x playback");
 
   let effectiveWidth = width;
   let effectiveHeight = height;
@@ -735,14 +736,19 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
 
     // ── Branch: Playback-capture (Tier mid/low) vs Pipelined-seek (Tier high) ──
 
-    if (hasVideoSource && supportsRVFC(video)) {
+    const usePlaybackCapture =
+      hasVideoSource &&
+      supportsRVFC(video) &&
+      (performanceMode === "speed" || (performanceMode === "auto" && (tier === "mid" || tier === "low")));
+
+    if (usePlaybackCapture) {
       // ──────────────────────────────────────────────────────────────────────
-      // SEQUENTIAL DECODE MODE
+      // PLAYBACK-CAPTURE MODE (Tier mid/low or performanceMode === "speed")
       // No frame-by-frame seeking. video.play() at normal rate and rVFC
       // delivers decoded frames naturally. Encoder backpressure pauses only
       // when necessary and never changes the media timestamps.
       // ──────────────────────────────────────────────────────────────────────
-      const captureStrategyLabel = "sequential decoded-frame capture (1x)";
+      const captureStrategyLabel = `playback-capture (Tier '${tier}', mode '${performanceMode}')`;
       console.log(`[ExportEngine] Capture strategy: ${captureStrategyLabel}`);
       onProgress?.({
         progress: 0.07,
@@ -767,12 +773,12 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
 
     } else {
       // ──────────────────────────────────────────────────────────────────────
-      // PIPELINED SEEK MODE (Tier high, or no rVFC support fallback)
+      // PIPELINED SEEK MODE (Tier high or performanceMode === "quality")
       // Maintains N+1 prefetch to overlap decode + encode latency.
       // On rVFC-capable browsers uses rVFC for frame-accurate confirmation.
       // ──────────────────────────────────────────────────────────────────────
       const useRVFC = hasVideoSource && supportsRVFC(video);
-      console.log(`[ExportEngine] Capture strategy: ${useRVFC ? "rVFC pipelined seek (Tier high)" : "pipelined seeked events"}`);
+      console.log(`[ExportEngine] Capture strategy: ${useRVFC ? `rVFC pipelined seek (Tier '${tier}', mode '${performanceMode}')` : `pipelined seeked events (Tier '${tier}', mode '${performanceMode}')`}`);
 
       const framePipeline = createFramePipeline(video, effectiveFps);
 
