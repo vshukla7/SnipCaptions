@@ -24,7 +24,6 @@ export function renderBlackPunchTheme(ctx: PixiThemeContext) {
     });
     const tempText = ctx.getTextNode(textStr, tempStyle);
     const wordWidth = tempText.width;
-    tempText.destroy();
     return { word: w, textStr, wordWidth };
   });
 

@@ -31,7 +31,7 @@ class TextNodeCache {
       this.cache.set(key, pool);
     }
     
-    let textNode = pool.find(n => !this.inUse.has(n));
+    let textNode = pool.find(n => !this.inUse.has(n) && !n.destroyed && n.scale);
     if (!textNode) {
       textNode = new Text({ text, style, resolution });
       pool.push(textNode);
@@ -44,7 +44,9 @@ class TextNodeCache {
       }
       // Reset common mutated properties
       textNode.alpha = 1;
-      textNode.scale.set(1);
+      if (textNode.scale) {
+        textNode.scale.set(1);
+      }
       textNode.rotation = 0;
       textNode.tint = 0xffffff;
       textNode.filters = null;
@@ -361,7 +363,7 @@ export class PixiCaptionRenderer {
         // Do NOT destroy Text nodes, we pool them!
         if (!(child instanceof Text)) {
           try {
-            child.destroy({ children: true, texture: true });
+            child.destroy({ children: false, texture: true });
           } catch {
             /* ignore if already destroyed */
           }
