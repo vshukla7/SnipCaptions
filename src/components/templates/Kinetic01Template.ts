@@ -50,15 +50,9 @@ export function renderKinetic01Theme(ctx: PixiThemeContext) {
         fontSize: Math.round(fontSize * 0.9),
         fill: accent,
         align: "center",
-        dropShadow: {
-          alpha: 0.6,
-          blur: 6,
-          color: "#000000",
-          distance: 2,
-        },
-      });
+        });
 
-      const topText = new Text({ text: topTextStr, style: topStyle });
+      const topText = ctx.getTextNode(topTextStr, topStyle);
       topText.anchor.set(0.5, 1);
       topText.position.set(0, -fontSize * 0.65);
       container.addChild(topText);
@@ -73,15 +67,9 @@ export function renderKinetic01Theme(ctx: PixiThemeContext) {
     fill: "#FFFFFF",
     stroke: { color: "#000000", width: 5 },
     align: "center",
-    dropShadow: {
-      alpha: 0.85,
-      blur: 12,
-      color: accent,
-      distance: 0,
-    },
-  });
+    });
 
-  const heroText = new Text({ text: currentWord.word.toUpperCase(), style: heroStyle });
+  const heroText = ctx.getTextNode(currentWord.word.toUpperCase(), heroStyle);
   heroText.anchor.set(0.5, 0.5);
   heroText.scale.set(heroScale);
   heroText.position.set(0, heroY);
@@ -103,15 +91,9 @@ export function renderKinetic01Theme(ctx: PixiThemeContext) {
         fontWeight: "700",
         fill: "#FFFFFF",
         align: "center",
-        dropShadow: {
-          alpha: 0.7,
-          blur: 4,
-          color: "#000000",
-          distance: 2,
-        },
-      });
+        });
 
-      const bottomText = new Text({ text: bottomTextStr.toUpperCase(), style: bottomStyle });
+      const bottomText = ctx.getTextNode(bottomTextStr.toUpperCase(), bottomStyle);
       bottomText.anchor.set(0.5, 0);
       bottomText.position.set(0, fontSize * 0.75);
       bottomText.alpha = 0.7;

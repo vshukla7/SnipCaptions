@@ -1,33 +1,3 @@
-/**
- * Hardware-Accelerated Video Export Engine (WebCodecs + MP4Muxer)
- * Zero-cloud-cost, client-side rendering pipeline utilizing WebCodecs API
- * (VideoEncoder, AudioEncoder), Pixi.js single-pass GPU compositing, and MP4Muxer.
- *
- * ── Adaptive 3-Tier Performance Architecture ────────────────────────────────
- *
- * Tier detection runs a ~300ms micro-benchmark at export start, measuring real
- * VideoEncoder throughput at target resolution. Based on result:
- *
- *  ┌─────────┬──────────────────────────────────────────┬─────────────────────────────┐
- *  │ Tier    │ Condition                                │ Capture strategy            │
- *  ├─────────┼──────────────────────────────────────────┼─────────────────────────────┤
- *  │ 'high'  │ ≥200 enc fps (hardware encoder confirmed)│ Pipelined seek + rVFC       │
- *  │ 'mid'   │ ≥60 enc fps  (software encoder, capable) │ Playback-capture 0.5×       │
- *  │ 'low'   │ <60 enc fps  (slow device / mobile)      │ Playback-capture 0.25×      │
- *  └─────────┴──────────────────────────────────────────┴─────────────────────────────┘
- *
- * Playback-capture mode (Tier mid/low):
- *   video.play() at slow rate → rVFC delivers decoded frames as they naturally arrive
- *   → zero seek overhead → if encoder overloads: video.pause() until queue drains → resume
- *   Eliminates ALL seek latency (~100% of bottleneck on iGPU/mobile devices).
- *
- * GPU compositing (all tiers, no 2D canvas):
- *   video (GPU) → PIXI.Texture.from(video) → .update() (GPU-side texImage2D)
- *               → Pixi single-pass composite (video sprite + captions)
- *               → new VideoFrame(pixiRenderer.canvas) (stays GPU-resident)
- * ────────────────────────────────────────────────────────────────────────────
- */
-
 import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 import { PixiCaptionRenderer } from "./pixi/PixiCaptionRenderer";
 import type { CaptionPosition, CaptionThemeId, Word } from "./types";
@@ -441,17 +411,21 @@ async function runPlaybackCapture(params: {
       lastEncodedTimestampUs = mediaTimeUs;
       capturedFrames++;
 
-      // ── Progress reporting ────────────────────────────────────────────────
       if (capturedFrames % 6 === 0 || capturedFrames >= totalFrames) {
         const elapsedSec = (performance.now() - startTime) / 1000;
         const encFps = elapsedSec > 0 ? capturedFrames / elapsedSec : 0;
         const progress = Math.min(1, meta.mediaTime / (totalFrames / fps));
+        
+        const estimatedTotalSec = elapsedSec / Math.max(0.01, progress);
+        const remainingSec = Math.max(0, Math.round(estimatedTotalSec - elapsedSec));
+        const etaString = remainingSec > 60 ? `${Math.floor(remainingSec / 60)}m ${remainingSec % 60}s` : `${remainingSec}s`;
+
         onProgress?.({
           progress: Math.min(0.92, 0.05 + progress * 0.87),
           currentFrame: capturedFrames,
           totalFrames,
           fps: Math.round(encFps),
-          stage: `Encoding frames (${Math.round(progress * 100)}%) · ${Math.round(encFps)} FPS`,
+          stage: `Encoding frames (${Math.round(progress * 100)}%) · ETA ${etaString}`,
         });
       }
 
@@ -802,9 +776,11 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
           framePipeline.prefetchNext(frameIdx + 1);
         }
 
-        // G. Single-yield backpressure (no busy-wait loop)
-        if (videoEncoder.encodeQueueSize > 4) {
-          await new Promise<void>((r) => setTimeout(r, 0));
+        // G. Proper backpressure: wait until queue drains
+        if (videoEncoder.encodeQueueSize > 15) {
+          while (videoEncoder.encodeQueueSize > 5) {
+            await new Promise<void>((r) => setTimeout(r, 10));
+          }
         }
 
         // H. Progress reporting (throttled to every 6 frames)
@@ -813,12 +789,16 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
         const progress = (frameIdx + 1) / effectiveTotalFrames;
 
         if (frameIdx % 6 === 0 || frameIdx === effectiveTotalFrames - 1) {
+          const estimatedTotalSec = elapsedSec / Math.max(0.01, progress);
+          const remainingSec = Math.max(0, Math.round(estimatedTotalSec - elapsedSec));
+          const etaString = remainingSec > 60 ? `${Math.floor(remainingSec / 60)}m ${remainingSec % 60}s` : `${remainingSec}s`;
+
           onProgress?.({
             progress: Math.min(0.92, 0.05 + progress * 0.87),
             currentFrame: frameIdx + 1,
             totalFrames: effectiveTotalFrames,
             fps: Math.round(currentRenderFps),
-            stage: `Encoding frames (${Math.round(progress * 100)}%) · ${Math.round(currentRenderFps)} FPS`,
+            stage: `Encoding frames (${Math.round(progress * 100)}%) · ETA ${etaString}`,
           });
         }
       }

@@ -10,10 +10,55 @@
  *   This eliminates the 2D-canvas intermediary and all GPU↔CPU round-trips during export.
  */
 
-import { Application, Container, Sprite, Texture } from "pixi.js";
+import { Application, Container, Sprite, Texture, Text, TextStyle } from "pixi.js";
 import type { CaptionPosition, CaptionThemeId, Word } from "../types";
 import { preloadAllFonts } from "../fontLoader";
 import { PIXI_THEMES } from "@/components/templates";
+
+class TextNodeCache {
+  private cache: Map<string, Text[]> = new Map();
+  private inUse: Set<Text> = new Set();
+
+  public get(text: string, style: any, resolution: number = 1): Text {
+    // Generate a simple key based on text content and key style props
+    // We ignore complex nested style props for performance, just checking text is usually enough
+    // since themes re-use the same style object for a given word.
+    const key = text + "_" + (style.fontSize || "") + "_" + resolution;
+    let pool = this.cache.get(key);
+    
+    if (!pool) {
+      pool = [];
+      this.cache.set(key, pool);
+    }
+    
+    let textNode = pool.find(n => !this.inUse.has(n));
+    if (!textNode) {
+      textNode = new Text({ text, style, resolution });
+      pool.push(textNode);
+    } else {
+      // Ensure the text and style are updated in case style mutated
+      textNode.text = text;
+      textNode.style = style;
+      if ((textNode as any).resolution !== resolution) {
+          (textNode as any).resolution = resolution;
+      }
+      // Reset common mutated properties
+      textNode.alpha = 1;
+      textNode.scale.set(1);
+      textNode.rotation = 0;
+      textNode.tint = 0xffffff;
+      textNode.filters = null;
+    }
+    
+    this.inUse.add(textNode);
+    return textNode;
+  }
+
+  public resetFrame(): void {
+    this.inUse.clear();
+  }
+}
+
 
 export interface CaptionRendererConfig {
   width: number;
@@ -79,6 +124,8 @@ export class PixiCaptionRenderer {
   public canvas: HTMLCanvasElement;
   public rootContainer: Container | null = null;
   public captionContainer: Container | null = null;
+  private textCache = new TextNodeCache();
+  private isDirty = true;
 
   private width = 1080;
   private height = 1920;
@@ -128,7 +175,7 @@ export class PixiCaptionRenderer {
         backgroundAlpha: 0,
         resolution: 1,
         autoDensity: false,
-        antialias: true,
+        antialias: false,
         autoStart: false,
         preference: "webgl",
       });
@@ -203,6 +250,7 @@ export class PixiCaptionRenderer {
 
   public updateConfig(config: CaptionRendererConfig): void {
     this.currentConfig = config;
+    this.isDirty = true;
     if (Math.abs(config.width - this.width) > 2 || Math.abs(config.height - this.height) > 2) {
       this.resize(config.width, config.height);
     }
@@ -310,10 +358,13 @@ export class PixiCaptionRenderer {
         if ((child as Container).children && (child as Container).children.length > 0) {
           this.destroyContainerChildren(child as Container);
         }
-        try {
-          child.destroy({ children: true, texture: true });
-        } catch {
-          /* ignore if already destroyed */
+        // Do NOT destroy Text nodes, we pool them!
+        if (!(child instanceof Text)) {
+          try {
+            child.destroy({ children: true, texture: true });
+          } catch {
+            /* ignore if already destroyed */
+          }
         }
       }
     }
@@ -335,15 +386,18 @@ export class PixiCaptionRenderer {
     this.updateVideoFrame();
 
     // Skip redundant identical renders when video is paused and time has not changed
-    if (time === this.lastRenderedTime && !config && !this.videoSprite) {
+    if (time === this.lastRenderedTime && !config && !this.videoSprite && !this.isDirty) {
       return;
     }
     this.lastRenderedTime = time;
+    this.isDirty = false;
 
     const { words, theme, accentColor, position, scale, customFontFamily, maxWordsPerLine = 3 } = cfg;
 
     // Explicitly destroy previous frame's GPU textures to prevent VRAM memory leaks & GC lag spikes
+    // Text nodes are preserved in cache to prevent allocation churn.
     this.destroyContainerChildren(this.captionContainer);
+    this.textCache.resetFrame();
 
     if (!words || words.length === 0) {
       try { this.app.render(); } catch {}
@@ -410,10 +464,15 @@ export class PixiCaptionRenderer {
         baseFont,
         customFontFamily,
         container: this.captionContainer,
+        getTextNode: (text: string, style: any) => {
+          const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+          const res = Math.max(1, scale) * dpr;
+          return this.textCache.get(text, style, res);
+        },
       });
     }
 
-    // Prevent Left & Right edge cropping when scaled or with long text
+    // Prevent Left & Right edge cropping with long text
     const maxSafeWidth = this.width * 0.90;
     const currentWidth = this.captionContainer.width;
     if (currentWidth > maxSafeWidth && currentWidth > 0) {

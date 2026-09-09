@@ -32,10 +32,9 @@ export function renderKineticTheme(ctx: PixiThemeContext) {
       fontSize: Math.round(fontSize * 1.1),
       fontWeight: "800",
       fill: isCurrent ? accent : "#FFFFFF",
-      dropShadow: { alpha: 0.7, blur: 8, color: "#000000", distance: 3 },
-    });
+      });
 
-    const wordText = new Text({ text: w.word, style });
+    const wordText = ctx.getTextNode(w.word, style);
     wordText.anchor.set(0, 0.5);
     wordText.scale.set(isCurrent ? popScale * 1.1 : popScale);
     wordText.alpha = wordAlpha;

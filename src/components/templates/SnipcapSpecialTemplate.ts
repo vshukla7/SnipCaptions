@@ -57,10 +57,9 @@ export function renderSnipcapSpecialTheme(ctx: PixiThemeContext) {
         fontSize: Math.round(fontSize * (isTopLine ? 1.3 : 0.95)),
         fontWeight: isTopLine ? "900" : "normal",
         fill: fillStyle,
-        dropShadow: { alpha: 0.6, blur: 6, color: "#000000", distance: 2 },
-      });
+        });
 
-      const text = new Text({ text: isTopLine ? w.word.toUpperCase() : w.word.toLowerCase(), style });
+      const text = ctx.getTextNode(isTopLine ? w.word.toUpperCase() : w.word.toLowerCase(), style);
       text.anchor.set(0, 0.5);
       text.position.set(currentX, wordY);
       text.alpha = wordAlpha;

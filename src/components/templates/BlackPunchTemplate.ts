@@ -22,7 +22,7 @@ export function renderBlackPunchTheme(ctx: PixiThemeContext) {
       fontSize: Math.round(fontSize * 1.05),
       fontWeight: "900",
     });
-    const tempText = new Text({ text: textStr, style: tempStyle });
+    const tempText = ctx.getTextNode(textStr, tempStyle);
     const wordWidth = tempText.width;
     tempText.destroy();
     return { word: w, textStr, wordWidth };
@@ -57,7 +57,7 @@ export function renderBlackPunchTheme(ctx: PixiThemeContext) {
         fill: "#000000",
       });
 
-      const activeText = new Text({ text: textStr, style: activeStyle });
+      const activeText = ctx.getTextNode(textStr, activeStyle);
       activeText.anchor.set(0.5, 0.5);
 
       const pillWidth = wordWidth + padX * 2;
@@ -82,15 +82,9 @@ export function renderBlackPunchTheme(ctx: PixiThemeContext) {
         fontSize: Math.round(fontSize * 1.05),
         fontWeight: "900",
         fill: "#FFFFFF",
-        dropShadow: {
-          alpha: 0.8,
-          blur: 6,
-          color: "#000000",
-          distance: 2,
-        },
-      });
+        });
 
-      const inactiveText = new Text({ text: textStr, style: inactiveStyle });
+      const inactiveText = ctx.getTextNode(textStr, inactiveStyle);
       inactiveText.anchor.set(0.5, 0.5);
       inactiveText.position.set(wordCenterX, 0);
 

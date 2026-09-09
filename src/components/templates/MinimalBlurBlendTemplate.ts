@@ -72,10 +72,9 @@ export function renderMinimalBlurBlendTheme(ctx: PixiThemeContext) {
         fontFamily: TOP_FONT,
         fontSize: Math.round(fontSize * 0.95),
         fill: isSpoken ? "#FFFFFF" : "rgba(255, 255, 255, 0.5)",
-        dropShadow: { alpha: 0.6, blur: 6, color: "#000000", distance: 2 },
-      });
+        });
 
-      const wordText = new Text({ text: w.word.toLowerCase(), style: scriptStyle });
+      const wordText = ctx.getTextNode(w.word.toLowerCase(), scriptStyle);
       wordText.anchor.set(0, 0.5);
       wordText.position.set(topX, wordY);
       wordText.alpha = wordAlpha;
@@ -118,10 +117,9 @@ export function renderMinimalBlurBlendTheme(ctx: PixiThemeContext) {
       fontSize: Math.round(fontSize * 1.45),
       fontWeight: "900",
       fill: accent,
-      dropShadow: { alpha: 0.85, blur: 14, color: accent, distance: 0 },
-    });
+      });
 
-    const heroText = new Text({ text: heroWordObj.word.toUpperCase(), style: heroStyle });
+    const heroText = ctx.getTextNode(heroWordObj.word.toUpperCase(), heroStyle);
     heroText.anchor.set(0.5, 0.5);
     heroText.position.set(0, 0); // Centered
     heroText.scale.set(heroScale);
@@ -165,10 +163,9 @@ export function renderMinimalBlurBlendTheme(ctx: PixiThemeContext) {
         fontFamily: BOTTOM_FONT,
         fontSize: Math.round(fontSize * 0.95),
         fill: "#FFFFFF",
-        dropShadow: { alpha: 0.7, blur: 6, color: "#000000", distance: 2 },
-      });
+        });
 
-      const wordText = new Text({ text: w.word.toLowerCase(), style: bottomStyle });
+      const wordText = ctx.getTextNode(w.word.toLowerCase(), bottomStyle);
       wordText.anchor.set(0, 0.5);
       wordText.position.set(botX, wordY);
       wordText.alpha = wordAlpha;

@@ -39,9 +39,9 @@ export function renderDualLineGlowTheme(ctx: PixiThemeContext) {
       dropShadow: isCurrent
         ? { alpha: 0.95, blur: 18, color: accent, distance: 0 }
         : { alpha: 0.6, blur: 4, color: "#000000", distance: 2 },
-    });
+      });
 
-    const wordText = new Text({ text: w.word.toUpperCase(), style });
+    const wordText = ctx.getTextNode(w.word.toUpperCase(), style);
     wordText.anchor.set(0, 0.5);
     wordText.scale.set(1.0);
     wordText.alpha = wordAlpha;
@@ -86,10 +86,9 @@ export function renderDualLineGlowTheme(ctx: PixiThemeContext) {
         fontFamily: BOTTOM_FONT,
         fontSize: Math.round(fontSize * 0.9),
         fill: "#FFFFFF",
-        dropShadow: { alpha: 0.7, blur: 6, color: "#000000", distance: 2 },
-      });
+        });
 
-      const wordText = new Text({ text: w.word.toLowerCase(), style: bottomStyle });
+      const wordText = ctx.getTextNode(w.word.toLowerCase(), bottomStyle);
       wordText.anchor.set(0, 0);
       wordText.position.set(botX, wordY);
       wordText.alpha = wordAlpha;

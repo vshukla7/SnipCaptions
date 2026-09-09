@@ -17,14 +17,7 @@ export function renderCleanTheme(ctx: PixiThemeContext) {
     fontSize: Math.round(fontSize * 1.05),
     fontWeight: "700",
     fill: "#FFFFFF",
-    dropShadow: {
-      alpha: 0.6,
-      angle: Math.PI / 6,
-      blur: 2,
-      color: "#000000",
-      distance: 2,
-    },
-  });
+    });
 
   words.forEach((w) => {
     const isSpoken = time >= w.start;
@@ -51,7 +44,7 @@ export function renderCleanTheme(ctx: PixiThemeContext) {
       ? interpolate(slideSpr, [0, 1], [0, 1], { extrapolateRight: "clamp" })
       : 0;
 
-    const textNode = new Text({ text: w.word, style });
+    const textNode = ctx.getTextNode(w.word, style);
     textNode.anchor.set(0, 0.5);
     textNode.position.set(currentX, wordY);
     textNode.alpha = wordAlpha;

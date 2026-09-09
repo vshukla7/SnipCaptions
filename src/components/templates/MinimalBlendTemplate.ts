@@ -70,10 +70,9 @@ export function renderMinimalBlendTheme(ctx: PixiThemeContext) {
         fontWeight: "900",
         fill: "#FFFFFF",
         letterSpacing: -1,
-        dropShadow: { alpha: 0.8, blur: 8, color: "#000000", distance: 4 },
-      });
+        });
 
-      const text = new Text({ text: w.word, style });
+      const text = ctx.getTextNode(w.word, style);
       text.anchor.set(0, 0.5);
       text.position.set(currentX, wordY);
       text.alpha = wordAlpha;

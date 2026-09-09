@@ -12,10 +12,9 @@ export function renderOneWordTheme(ctx: PixiThemeContext) {
     fontWeight: "900",
     fill: accent,
     stroke: { color: "#000000", width: 5 },
-    dropShadow: { alpha: 0.8, blur: 8, color: "#000000", distance: 4 },
-  });
+    });
 
-  const text = new Text({ text: activeWord.word.toUpperCase(), style });
+  const text = ctx.getTextNode(activeWord.word.toUpperCase(), style);
   text.anchor.set(0.5, 0.5);
   container.addChild(text);
 }

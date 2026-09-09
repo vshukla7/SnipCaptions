@@ -23,4 +23,5 @@ export interface PixiThemeContext {
   baseFont: string;
   customFontFamily?: string | null;
   container: Container;
+  getTextNode: (text: string, style: any) => import("pixi.js").Text;
 }

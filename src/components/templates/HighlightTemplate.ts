@@ -18,16 +18,14 @@ export function renderHighlightTheme(ctx: PixiThemeContext) {
     fontSize: Math.round(fontSize * 1.05),
     fontWeight: "700",
     fill: accent,
-    dropShadow: { alpha: 0.8, blur: 2, color: accent, distance: 0 },
-  });
+    });
 
   const pastStyle = new TextStyle({
     fontFamily: baseFont,
     fontSize: Math.round(fontSize * 1.05),
     fontWeight: "700",
     fill: "#FFFFFF",
-    dropShadow: { alpha: 0.5, blur: 2, color: "#000000", distance: 2 },
-  });
+    });
 
   const futureStyle = new TextStyle({
     fontFamily: baseFont,
@@ -41,7 +39,7 @@ export function renderHighlightTheme(ctx: PixiThemeContext) {
     const isPast = time >= w.end;
     const style = isCurrent ? activeStyle : isPast ? pastStyle : futureStyle;
 
-    const wordText = new Text({ text: w.word, style });
+    const wordText = ctx.getTextNode(w.word, style);
     wordText.anchor.set(0, 0.5);
     wordText.scale.set(isCurrent ? 1.08 : 1.0);
     wordText.position.set(currentX, 0);

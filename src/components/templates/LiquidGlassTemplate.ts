@@ -22,7 +22,7 @@ export function renderLiquidGlassTheme(ctx: PixiThemeContext) {
       fill: isCurrent ? accent : "#FFFFFF",
     });
 
-    const wordText = new Text({ text: w.word, style });
+    const wordText = ctx.getTextNode(w.word, style);
     wordText.anchor.set(0, 0.5);
     wordText.position.set(currentX, 0);
     wordText.alpha = isCurrent ? 1 : 0.5;

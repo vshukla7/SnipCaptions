@@ -93,7 +93,7 @@ export function renderPremiereGlowTheme(ctx: PixiThemeContext) {
           : { alpha: 0.8, blur: 8, color: "#000000", distance: 4 },
       });
 
-      const textNode = new Text({ text: w.word, style });
+      const textNode = ctx.getTextNode(w.word, style);
       textNode.anchor.set(0, 0.5);
 
       textNode.position.set(currentX, wordY);

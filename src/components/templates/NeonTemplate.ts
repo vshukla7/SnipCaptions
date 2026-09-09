@@ -14,15 +14,9 @@ export function renderNeonTheme(ctx: PixiThemeContext) {
     fill: "#FFFFFF",
     stroke: { color: accent, width: 4 },
     align: "center",
-    dropShadow: {
-      alpha: 0.95,
-      blur: 16,
-      color: accent,
-      distance: 0,
-    },
-  });
+    });
 
-  const text = new Text({ text: activeLine.text.toUpperCase(), style });
+  const text = ctx.getTextNode(activeLine.text.toUpperCase(), style);
   text.anchor.set(0.5, 0.5);
   container.addChild(text);
 }
