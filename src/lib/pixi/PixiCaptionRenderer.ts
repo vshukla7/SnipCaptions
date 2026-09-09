@@ -498,12 +498,14 @@ export class PixiCaptionRenderer {
         if (this.app.ticker) {
           this.app.ticker.stop();
         }
-        // Force browser to release WebGL context extension slot
+        // Force browser to release WebGL context extension slot if not already lost
         try {
           const gl = (this.app.renderer as { gl?: WebGLRenderingContext })?.gl;
-          const loseContext = gl?.getExtension?.("WEBGL_lose_context");
-          if (loseContext) {
-            loseContext.loseContext();
+          if (gl && !gl.isContextLost()) {
+            const loseContext = gl.getExtension?.("WEBGL_lose_context");
+            if (loseContext) {
+              loseContext.loseContext();
+            }
           }
         } catch {}
 
