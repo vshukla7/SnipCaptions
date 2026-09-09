@@ -24,6 +24,7 @@ export default function Home() {
     statusMessage,
     proxyStatus,
     proxyProgress,
+    studioActions,
   } = useApp();
 
   const [isTutorialOpen, setIsTutorialOpen] = useState(false);
@@ -108,6 +109,7 @@ export default function Home() {
         title={statusMessage || "Rendering video..."}
         progress={progress}
         adType="exporting"
+        onCancel={studioActions?.onCancelExport}
       />
 
       <main className="flex-1 overflow-y-auto flex flex-col">

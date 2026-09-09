@@ -145,6 +145,7 @@ export function AdInterstitial({
   words,
   hideProgressPercent = false,
   adType = "transcribing",
+  onCancel,
 }: {
   open: boolean;
   title?: string;
@@ -152,6 +153,7 @@ export function AdInterstitial({
   words?: number;
   hideProgressPercent?: boolean;
   adType?: "transcribing" | "exporting";
+  onCancel?: () => void;
 }) {
   if (!open) return null;
   const pct = Math.round((progress ?? 0) * 100);
@@ -165,9 +167,9 @@ export function AdInterstitial({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-in fade-in duration-200">
-      <div className="flex w-full max-w-xl flex-col items-center gap-6 rounded-3xl border border-white/[0.1] bg-[#1C1C1E] p-8 shadow-2xl">
+      <div className="flex w-full max-w-xl flex-col items-center gap-5 rounded-3xl border border-white/[0.1] bg-[#1C1C1E] p-7 shadow-2xl">
         {/* Ad Container Box */}
-        <div className="flex h-56 w-full items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/[0.03] p-6 text-center overflow-hidden">
+        <div className="flex h-52 w-full items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/[0.03] p-6 text-center overflow-hidden">
           {hasAdConfig && clientId && slotId ? (
             <GoogleAdsenseUnit
               clientId={clientId}
@@ -215,6 +217,23 @@ export function AdInterstitial({
               />
             )}
           </div>
+        </div>
+
+        {/* Note & Cancel Button Footer */}
+        <div className="flex w-full items-center justify-between pt-3 text-xs border-t border-white/[0.08] mt-1">
+          <div className="flex items-center gap-1.5 text-[11px] text-white/45">
+            <span className="text-[#2997FF]">⚡</span>
+            <span>Export duration depends on your device CPU/GPU performance.</span>
+          </div>
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 px-3.5 py-1.5 text-[12px] font-semibold transition-all border border-red-500/20 hover:border-red-500/40 shrink-0 ml-2 cursor-pointer"
+            >
+              Cancel Export
+            </button>
+          )}
         </div>
       </div>
     </div>

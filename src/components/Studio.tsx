@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect, useRef } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { PixiPlayer, PixiPlayerRef } from "./PixiPlayer";
 import { useApp } from "@/lib/store";
 import { CAPTION_THEMES } from "@/lib/types";
@@ -735,12 +735,34 @@ export function Studio() {
     return () => observer.disconnect();
   }, [naturalAspect]);
 
+  const exportAbortControllerRef = useRef<AbortController | null>(null);
+
+  const handleCancelExport = useCallback(() => {
+    if (exportAbortControllerRef.current) {
+      exportAbortControllerRef.current.abort();
+      exportAbortControllerRef.current = null;
+    }
+    setExporting(false);
+    setStatus("ready");
+    setStatusMessage("Export cancelled");
+    setToast({
+      type: "warning",
+      message: "Export cancelled by user.",
+    });
+  }, [setStatus, setStatusMessage]);
+
   const handleExport = async () => {
-    if (!ready) return;
+    if (exporting || !words || words.length === 0) return;
+
+    const renderWidth = naturalAspect ? (naturalAspect >= 1 ? 1920 : Math.round(1080 * naturalAspect)) : (originalWidth > 0 ? originalWidth : 1080);
+    const renderHeight = naturalAspect ? (naturalAspect >= 1 ? Math.round(1920 / naturalAspect) : 1080) : (originalHeight > 0 ? originalHeight : 1920);
 
     if (playerRef.current) {
       playerRef.current.pause();
     }
+
+    const abortController = new AbortController();
+    exportAbortControllerRef.current = abortController;
 
     setExporting(true);
     setStatus("exporting");
@@ -774,6 +796,7 @@ export function Studio() {
         height: aspectH,
         fps: 60,
         durationInSeconds,
+        signal: abortController.signal,
         onProgress: (p) => {
           setProgress(p.progress);
           setStatusMessage(p.stage);
@@ -797,13 +820,18 @@ export function Studio() {
         message: "Video exported in record time using GPU WebCodecs!",
       });
     } catch (e) {
-      console.error("[Studio] WebCodecs export error", e);
-      setStatusMessage(e instanceof Error ? e.message : "Export failed");
-      setToast({
-        type: "error",
-        message: e instanceof Error ? e.message : "An unexpected error occurred during export.",
-      });
+      if (abortController.signal.aborted || (e instanceof Error && e.message.includes("cancelled"))) {
+        console.log("[Studio] Export was cancelled by user.");
+      } else {
+        console.error("[Studio] WebCodecs export error", e);
+        setStatusMessage(e instanceof Error ? e.message : "Export failed");
+        setToast({
+          type: "error",
+          message: e instanceof Error ? e.message : "An unexpected error occurred during export.",
+        });
+      }
     } finally {
+      exportAbortControllerRef.current = null;
       setExporting(false);
       setStatus("ready");
     }
@@ -858,9 +886,10 @@ export function Studio() {
     setStudioActions({
       onDownloadSRT: () => downloadSRTRef.current(),
       onExport: () => exportVideoRef.current(),
+      onCancelExport: () => handleCancelExport(),
     });
     return () => setStudioActions(null);
-  }, [setStudioActions]);
+  }, [setStudioActions, handleCancelExport]);
 
   return (
     <div className="flex h-full w-full flex-col overflow-hidden bg-[#0A0A0C]">

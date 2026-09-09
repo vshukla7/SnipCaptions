@@ -26,6 +26,7 @@ export type ProxyStatus = "idle" | "generating" | "ready" | "failed";
 export interface StudioActions {
   onDownloadSRT: () => void;
   onExport: () => void;
+  onCancelExport?: () => void;
 }
 
 interface AppContextValue {
