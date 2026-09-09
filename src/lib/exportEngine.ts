@@ -185,12 +185,23 @@ function seekVideoOnce(video: HTMLVideoElement, time: number): Promise<void> {
       return;
     }
 
-    const onSeeked = () => {
-      video.removeEventListener("seeked", onSeeked);
+    let timer: NodeJS.Timeout | number | null = null;
+    let done = false;
+
+    const finish = () => {
+      if (done) return;
+      done = true;
+      if (timer !== null) clearTimeout(timer);
+      video.removeEventListener("seeked", finish);
+      video.removeEventListener("error", finish);
       resolve();
     };
 
-    video.addEventListener("seeked", onSeeked, { once: true });
+    // Safety timeout: 1200ms watchdog prevents infinite hang if seeked event is dropped
+    timer = setTimeout(finish, 1200);
+
+    video.addEventListener("seeked", finish, { once: true });
+    video.addEventListener("error", finish, { once: true });
     video.currentTime = clampedTime;
   });
 }
@@ -243,30 +254,52 @@ function supportsRVFC(video: HTMLVideoElement): video is RvfcCapableVideo {
 
 /**
  * Seek + rVFC confirmation: seeks to targetTime and resolves only when rVFC
- * confirms the decoded frame is at the right timestamp.
+ * confirms the decoded frame is at the right timestamp, with a 1200ms watchdog.
  */
 function seekWithRVFC(video: RvfcCapableVideo, targetTime: number): Promise<void> {
   return new Promise((resolve) => {
     const clampedTime = Math.min(video.duration > 0 ? video.duration : targetTime, Math.max(0, targetTime));
 
+    if (Math.abs(video.currentTime - clampedTime) < 0.001) {
+      resolve();
+      return;
+    }
+
     let rvfcId: number | null = null;
+    let timer: NodeJS.Timeout | number | null = null;
     let settled = false;
 
     const settle = () => {
       if (settled) return;
       settled = true;
-      if (rvfcId !== null) video.cancelVideoFrameCallback(rvfcId);
+      if (timer !== null) clearTimeout(timer);
+      if (rvfcId !== null) {
+        try { video.cancelVideoFrameCallback(rvfcId); } catch {}
+      }
+      video.removeEventListener("seeked", onSeeked);
+      video.removeEventListener("error", settle);
       resolve();
     };
 
+    const onSeeked = () => {
+      // Seeked fired, allow 80ms for rVFC or settle
+      setTimeout(settle, 80);
+    };
+
     const onFrame = (_now: number, meta: { mediaTime: number }) => {
-      if (Math.abs(meta.mediaTime - clampedTime) < 0.034) {
+      if (settled) return;
+      if (Math.abs(meta.mediaTime - clampedTime) < 0.04) {
         settle();
       } else {
         rvfcId = video.requestVideoFrameCallback(onFrame);
       }
     };
 
+    // 1200ms watchdog prevents hanging if rVFC or seeked event stalls
+    timer = setTimeout(settle, 1200);
+
+    video.addEventListener("seeked", onSeeked, { once: true });
+    video.addEventListener("error", settle, { once: true });
     video.currentTime = clampedTime;
     rvfcId = video.requestVideoFrameCallback(onFrame);
   });
@@ -276,23 +309,6 @@ function seekWithRVFC(video: RvfcCapableVideo, targetTime: number): Promise<void
 
 /**
  * Playback-capture export loop — eliminates ALL seek overhead for mid/low-end devices.
- *
- * Instead of seeking to each frame time, we:
- *   1. Set video.playbackRate = slow rate (0.25× or 0.5× depending on tier)
- *   2. Call video.play() — the browser's hardware video decoder runs at native speed
- *   3. requestVideoFrameCallback delivers each decoded frame at the exact GPU moment
- *   4. We render + encode each incoming frame
- *   5. If VideoEncoder queue fills up → pause playback until it drains → resume
- *
- * This works because:
- *   - Mobile/iGPU SoCs have dedicated H.264 decode hardware that runs at 120fps+
- *   - Slow playback rate means the encoder gets 2–4× more time per frame
- *   - Pausing on backpressure prevents dropped frames without any polling
- *
- * The export takes at minimum `duration / playbackRate` real seconds, but on
- * slow devices this is still dramatically faster than thousands of random seeks.
- *
- * @returns total frames captured
  */
 async function runPlaybackCapture(params: {
   video: RvfcCapableVideo;
@@ -319,16 +335,19 @@ async function runPlaybackCapture(params: {
     onProgress,
   } = params;
 
-  // Capture the browser's sequential decoded stream at normal playback speed.
-  // Slowing playback changes wall-clock timing without improving timestamps.
   const playbackRate = 1;
 
   return new Promise<number>((resolve, reject) => {
     let capturedFrames = 0;
     let lastEncodedTimestampUs = -1;
+    let duplicateCount = 0;
+    let watchdogTimer: NodeJS.Timeout | number | null = null;
+    let lastProgressTime = performance.now();
+    let lastProgressFrame = 0;
     const startTime = performance.now();
 
     const cleanup = () => {
+      if (watchdogTimer !== null) clearInterval(watchdogTimer);
       video.pause();
       video.playbackRate = 1;
       video.removeEventListener("ended", onEnded);
@@ -344,6 +363,26 @@ async function runPlaybackCapture(params: {
       cleanup();
       reject(new Error("[ExportEngine] Video element error during playback-capture"));
     };
+
+    // Watchdog check every 1.5s: if progress stalls for > 6s, finish gracefully
+    watchdogTimer = setInterval(() => {
+      const now = performance.now();
+      if (capturedFrames > lastProgressFrame) {
+        lastProgressFrame = capturedFrames;
+        lastProgressTime = now;
+        return;
+      }
+      if (now - lastProgressTime > 2500) {
+        if (video.paused && videoEncoder.encodeQueueSize <= 2) {
+          video.play().catch(() => {});
+          video.requestVideoFrameCallback(captureFrame);
+        } else if (now - lastProgressTime > 6000) {
+          console.warn("[ExportEngine] Playback-capture watchdog timeout. Completing export with captured frames.");
+          cleanup();
+          resolve(capturedFrames);
+        }
+      }
+    }, 1500);
 
     video.addEventListener("ended", onEnded, { once: true });
     video.addEventListener("error", onVideoError, { once: true });
@@ -361,16 +400,24 @@ async function runPlaybackCapture(params: {
         return;
       }
 
-      const mediaTimeUs = Math.round(meta.mediaTime * 1_000_000);
+      let currentMediaTime = meta.mediaTime;
+      const mediaTimeUs = Math.round(currentMediaTime * 1_000_000);
 
-      // Ignore duplicate callbacks from the browser compositor.
+      // Ignore duplicate callbacks from browser compositor with loop breaker
       if (mediaTimeUs <= lastEncodedTimestampUs) {
-        video.requestVideoFrameCallback(captureFrame);
-        return;
+        duplicateCount++;
+        if (duplicateCount > 25) {
+          currentMediaTime += 0.033;
+          duplicateCount = 0;
+        } else {
+          video.requestVideoFrameCallback(captureFrame);
+          return;
+        }
       }
+      duplicateCount = 0;
 
       // Skip frames beyond the intended duration
-      if (meta.mediaTime > (totalFrames / fps) + 0.05) {
+      if (currentMediaTime > (totalFrames / fps) + 0.05) {
         cleanup();
         resolve(capturedFrames);
         return;
@@ -379,7 +426,6 @@ async function runPlaybackCapture(params: {
       // ── Backpressure: pause video until encoder queue drains ──────────────
       if (videoEncoder.encodeQueueSize > 6) {
         video.pause();
-        // Poll until queue is clear, then resume playback
         const waitForDrain = () => {
           if (videoEncoder.encodeQueueSize <= 2) {
             video.playbackRate = playbackRate;
@@ -390,16 +436,16 @@ async function runPlaybackCapture(params: {
           }
         };
         setTimeout(waitForDrain, 8);
-        return; // Don't register another rVFC yet — waitForDrain will
+        return;
       }
 
       // ── GPU texture refresh + single-pass composite ───────────────────────
       pixiRenderer.updateVideoFrame();
-      pixiRenderer.renderTime(meta.mediaTime, captionConfig);
+      pixiRenderer.renderTime(currentMediaTime, captionConfig);
 
       // ── Capture from WebGL canvas (GPU-resident, zero CPU copy) ──────────
       const videoFrame = new VideoFrame(pixiRenderer.canvas, {
-        timestamp: mediaTimeUs,
+        timestamp: Math.round(currentMediaTime * 1_000_000),
         duration: frameDurationUs,
       });
 
@@ -408,13 +454,13 @@ async function runPlaybackCapture(params: {
       videoEncoder.encode(videoFrame, { keyFrame: isKeyframe });
       videoFrame.close();
 
-      lastEncodedTimestampUs = mediaTimeUs;
+      lastEncodedTimestampUs = Math.round(currentMediaTime * 1_000_000);
       capturedFrames++;
 
       if (capturedFrames % 6 === 0 || capturedFrames >= totalFrames) {
         const elapsedSec = (performance.now() - startTime) / 1000;
         const encFps = elapsedSec > 0 ? capturedFrames / elapsedSec : 0;
-        const progress = Math.min(1, meta.mediaTime / (totalFrames / fps));
+        const progress = Math.min(1, currentMediaTime / (totalFrames / fps));
         
         const estimatedTotalSec = elapsedSec / Math.max(0.01, progress);
         const remainingSec = Math.max(0, Math.round(estimatedTotalSec - elapsedSec));
