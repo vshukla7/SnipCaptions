@@ -4,7 +4,8 @@ import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { PixiPlayer, PixiPlayerRef } from "./PixiPlayer";
 import { useApp } from "@/lib/store";
 import { CAPTION_THEMES } from "@/lib/types";
-import { exportVideoWithWebCodecs } from "@/lib/exportEngine";
+import { exportVideoWithWebCodecs, type ExportMethod } from "@/lib/exportEngine";
+import { ExportModal } from "./ExportModal";
 
 const FPS = 30; // 30 FPS Lock
 
@@ -566,6 +567,7 @@ export function Studio() {
   const [activeTab, setActiveTab] = useState<"templates" | "settings" | "transcript">("templates");
   const [isMobileDevice, setIsMobileDevice] = useState(false);
   const [toast, setToast] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   // Auto detect mobile device
   useEffect(() => {
@@ -751,7 +753,7 @@ export function Studio() {
     });
   }, [setStatus, setStatusMessage]);
 
-  const handleExport = async () => {
+  const handleExport = async (method: ExportMethod = "playback") => {
     if (exporting || !words || words.length === 0) return;
 
     const renderWidth = naturalAspect ? (naturalAspect >= 1 ? 1920 : Math.round(1080 * naturalAspect)) : (originalWidth > 0 ? originalWidth : 1080);
@@ -778,7 +780,7 @@ export function Studio() {
     const aspectH = Math.max(2, Math.round((renderHeight * exportScale) / 2) * 2);
 
     try {
-      console.log(`[Studio:export] Starting export (${aspectW}x${aspectH}${isLowEndDevice ? ", low-end 1080p cap" : ", original resolution"})`);
+      console.log(`[Studio:export] Starting export (${aspectW}x${aspectH}${isLowEndDevice ? ", low-end 1080p cap" : ", original resolution"}, method: ${method})`);
 
       const exportSrc = originalVideoUrl || videoUrl || "";
       const exportFile = videoFile || new Blob([], { type: "video/mp4" });
@@ -796,6 +798,7 @@ export function Studio() {
         height: aspectH,
         fps: 60,
         durationInSeconds,
+        exportMethod: method,
         signal: abortController.signal,
         onProgress: (p) => {
           setProgress(p.progress);
@@ -879,7 +882,7 @@ export function Studio() {
 
   downloadSRTRef.current = downloadSRT;
   exportVideoRef.current = () => {
-    void handleExport();
+    setIsExportModalOpen(true);
   };
 
   useEffect(() => {
@@ -1221,6 +1224,18 @@ export function Studio() {
         </div>
       )}
 
+      {/* Export Options Modal */}
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        onConfirm={(method) => {
+          void handleExport(method);
+        }}
+        width={naturalAspect ? (naturalAspect >= 1 ? 1920 : Math.round(1080 * naturalAspect)) : (originalWidth > 0 ? originalWidth : 1080)}
+        height={naturalAspect ? (naturalAspect >= 1 ? Math.round(1920 / naturalAspect) : 1080) : (originalHeight > 0 ? originalHeight : 1920)}
+        fps={60}
+        durationInSeconds={durationInSeconds}
+      />
     </div>
   );
 }

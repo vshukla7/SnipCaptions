@@ -3,8 +3,7 @@ import { PixiCaptionRenderer } from "./pixi/PixiCaptionRenderer";
 import type { CaptionPosition, CaptionThemeId, Word } from "./types";
 import { preloadAllFonts } from "./fontLoader";
 
-export type PerformanceMode = "auto" | "quality" | "speed";
-export type HardwareTier = "high" | "mid" | "low";
+export type ExportMethod = "playback" | "seek";
 
 export interface ExportOptions {
   videoFile: File | Blob;
@@ -20,11 +19,11 @@ export interface ExportOptions {
   fps?: number;
   durationInSeconds: number;
   bitrate?: number;
-  /** Controls which capture strategy is used.
-   *  - 'auto'    (default) — benchmark device, pick tier automatically
-   *  - 'quality' — force pipelined seek mode (best for dGPU systems)
-   *  - 'speed'   — force playback-capture mode (best for iGPU / mobile) */
-  performanceMode?: PerformanceMode;
+  /** Export method:
+   * - 'playback' (default): 1x Real-Time stream capture (exact video duration, no seek latency)
+   * - 'seek': Deterministic frame-by-frame seeking (100% exact frame timestamps)
+   */
+  exportMethod?: ExportMethod;
   onProgress?: (p: {
     progress: number;
     currentFrame: number;
@@ -32,7 +31,6 @@ export interface ExportOptions {
     fps: number;
     stage: string;
   }) => void;
-  onTierDetected?: (tier: HardwareTier) => void;
   signal?: AbortSignal;
 }
 
@@ -87,86 +85,6 @@ async function findSupportedH264Codec(
   );
 }
 
-// ── Hardware Tier Detection ───────────────────────────────────────────────────
-
-/**
- * Micro-benchmark: creates a temporary VideoEncoder and encodes N blank frames
- * at the target resolution, measuring real encode throughput (frames/sec).
- *
- * This tells us whether the device has a hardware H.264 encoder (fast path) or
- * is falling back to software encoding (slow path), so we can optimize export.
- */
-async function detectHardwareTier(
-  width: number,
-  height: number,
-  fps: number,
-  bitrate: number,
-  videoCodec: string,
-): Promise<HardwareTier> {
-  const BENCH_FRAMES = 8;
-
-  try {
-    let encodeCount = 0;
-    const benchEncoder = new VideoEncoder({
-      output: () => { encodeCount++; },
-      error: () => {},
-    });
-
-    benchEncoder.configure({
-      codec: videoCodec,
-      width,
-      height,
-      bitrate,
-      framerate: fps,
-      hardwareAcceleration: "prefer-hardware",
-      avc: { format: "avc" },
-    });
-
-    // Create a blank OffscreenCanvas to source the benchmark frames from.
-    const benchCanvas = new OffscreenCanvas(width, height);
-    const benchCtx = benchCanvas.getContext("2d");
-    if (benchCtx) {
-      benchCtx.fillRect(0, 0, width, height);
-    }
-    const t0 = performance.now();
-
-    for (let i = 0; i < BENCH_FRAMES; i++) {
-      const frame = new VideoFrame(benchCanvas, {
-        timestamp: Math.round((i / fps) * 1_000_000),
-        duration: Math.round((1 / fps) * 1_000_000),
-      });
-      benchEncoder.encode(frame, { keyFrame: i === 0 });
-      frame.close();
-    }
-
-    await benchEncoder.flush();
-    benchEncoder.close();
-
-    const elapsed = (performance.now() - t0) / 1000;
-    const encodedFps = BENCH_FRAMES / Math.max(elapsed, 0.001);
-
-    let tier: HardwareTier;
-    if (encodedFps >= 200) {
-      tier = "high";
-    } else if (encodedFps >= 60) {
-      tier = "mid";
-    } else {
-      tier = "low";
-    }
-
-    console.log(
-      `[ExportEngine] Hardware benchmark: ${encodedFps.toFixed(0)} enc-fps → Tier '${tier}'` +
-      ` (${width}×${height} @ ${fps}fps, ${BENCH_FRAMES} frames in ${(elapsed * 1000).toFixed(0)}ms)`,
-    );
-    return tier;
-  } catch (e) {
-    console.warn("[ExportEngine] Hardware tier detection failed, defaulting to 'mid':", e);
-    return "mid";
-  }
-}
-
-// ── Frame Seeking Engine (Industry-Grade Video Decoder Sync) ─────────────────
-
 type RvfcCapableVideo = HTMLVideoElement & {
   requestVideoFrameCallback: (cb: (now: number, meta: { mediaTime: number }) => void) => number;
   cancelVideoFrameCallback: (id: number) => void;
@@ -176,16 +94,46 @@ function supportsRVFC(video: HTMLVideoElement): video is RvfcCapableVideo {
   return typeof (video as RvfcCapableVideo).requestVideoFrameCallback === "function";
 }
 
+function waitForNextVideoFrame(
+  video: RvfcCapableVideo,
+  timeoutMs = 600,
+): Promise<{ mediaTime: number } | null> {
+  return new Promise((resolve) => {
+    let handleId: number | null = null;
+    let timer: NodeJS.Timeout | null = null;
+
+    const cleanup = () => {
+      if (handleId !== null) video.cancelVideoFrameCallback(handleId);
+      if (timer !== null) clearTimeout(timer);
+      video.removeEventListener("ended", onEnded);
+    };
+
+    const onEnded = () => {
+      cleanup();
+      resolve(null);
+    };
+
+    handleId = video.requestVideoFrameCallback((_now, metadata) => {
+      cleanup();
+      resolve({ mediaTime: metadata.mediaTime });
+    });
+
+    timer = setTimeout(() => {
+      cleanup();
+      resolve(null);
+    }, timeoutMs);
+
+    video.addEventListener("ended", onEnded, { once: true });
+  });
+}
+
 /**
  * Fast, Stutter-Free Video Seeking for Offscreen WebGL Compositing.
  *
  * 1. Checks if video is already at the target timestamp.
  * 2. Sets video.currentTime = clampedTime.
- * 3. If video.seeking is true, waits for "seeked" event.
- * 4. If video.seeking is false (browser skipped seek because frame is already current),
- *    resolves immediately.
- * 5. Uses requestAnimationFrame tick for WebGL texture upload (never rVFC on paused videos).
- * 6. Includes a 150ms watchdog to ensure export never stalls.
+ * 3. Waits for "seeked" event or resolves immediately if already current.
+ * 4. Includes a 1500ms watchdog to ensure export never hangs.
  */
 function seekVideoToTime(video: HTMLVideoElement, targetTime: number): Promise<void> {
   return new Promise((resolve) => {
@@ -194,8 +142,8 @@ function seekVideoToTime(video: HTMLVideoElement, targetTime: number): Promise<v
       ? Math.min(Math.max(0, targetTime), Math.max(0, duration - 0.001))
       : Math.max(0, targetTime);
 
-    // If currentTime is already virtually identical (within 8ms = half a frame at 60fps) and not seeking, resolve immediately
-    if (Math.abs(video.currentTime - clampedTime) < 0.008 && !video.seeking) {
+    // If currentTime is already virtually identical and video is ready and not seeking, resolve immediately
+    if (Math.abs(video.currentTime - clampedTime) < 0.002 && !video.seeking && video.readyState >= 2) {
       resolve();
       return;
     }
@@ -211,50 +159,40 @@ function seekVideoToTime(video: HTMLVideoElement, targetTime: number): Promise<v
       video.removeEventListener("error", onError);
     };
 
-    const done = () => {
+    const onSeeked = () => {
       cleanup();
-      // Offscreen rendering: resolve via microtask instead of requestAnimationFrame
-      // (rAF throttles to 1Hz or freezes completely in background/hidden tabs or offscreen elements)
       resolve();
     };
 
     const onError = () => {
-      done();
+      cleanup();
+      resolve();
     };
 
-    const onSeeked = () => {
-      done();
-    };
-
-    // Fast watchdog: 100ms max per seek. Never stall export loop or trigger encoder inactivity timeout!
-    timer = setTimeout(done, 100);
+    // Watchdog: 1500ms max per seek to ensure export loop never hangs indefinitely
+    timer = setTimeout(() => {
+      cleanup();
+      resolve();
+    }, 1500);
 
     video.addEventListener("seeked", onSeeked, { once: true });
     video.addEventListener("error", onError, { once: true });
 
     try {
       video.currentTime = clampedTime;
-      // If video.seeking is false immediately after assignment, browser skipped seek
-      if (!video.seeking) {
-        done();
-      }
     } catch {
-      done();
+      cleanup();
+      resolve();
     }
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-
 /**
  * Main WebCodecs Hardware-Accelerated Video Exporter.
  *
- * Industry-grade offline frame rendering engine:
- *   - Frame-accurate deterministic seek loop with GPU texture presentation sync
- *   - Zero CPU video copy (GPU-resident WebGL texture compositing via PixiJS)
- *   - Hardware-accelerated H.264 VideoEncoder & AAC AudioEncoder
- *   - Accurate backpressure management (pauses JS render loop, not video playback)
- *   - Universal cross-browser compatibility (Chrome, Edge, Safari, Firefox)
+ * Dual Mode Architecture:
+ *   - 'playback': Real-time 1x stream capture via requestVideoFrameCallback (Speed = video duration)
+ *   - 'seek': Deterministic frame-by-frame seeking (100% precision)
  */
 export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<Blob> {
   const {
@@ -270,9 +208,8 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
     height,
     fps = 60,
     durationInSeconds,
-    performanceMode = "auto",
+    exportMethod = "playback",
     onProgress,
-    onTierDetected,
     signal,
   } = options;
 
@@ -284,7 +221,7 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
 
   if (signal?.aborted) throw new Error("Export cancelled.");
 
-  // 2. Prepare offscreen video element with robust multi-fallback source resolution
+  // 2. Prepare offscreen video element with multi-fallback source resolution
   let hasVideoSource = false;
   let createdBlobUrl = "";
   const video = document.createElement("video");
@@ -333,7 +270,8 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
 
   const duration = durationInSeconds || (hasVideoSource && video.duration > 0 ? video.duration : 7);
   const totalFrames = Math.max(1, Math.round(duration * fps));
-  const bitrate = Math.min(18_000_000, Math.max(4_000_000, Math.round((width * height * fps * 0.15))));
+  const bitrate = options.bitrate || Math.min(18_000_000, Math.max(4_000_000, Math.round(width * height * fps * 0.15)));
+  const frameDurationUs = Math.round((1 / fps) * 1_000_000);
 
   onProgress?.({ progress: 0.04, currentFrame: 0, totalFrames, fps: 0, stage: "Configuring GPU encoders…" });
 
@@ -364,25 +302,13 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
     }
   }
 
-  // 5. Detect hardware performance tier dynamically
-  const tier = await detectHardwareTier(width, height, fps, bitrate, videoCodec);
-  onTierDetected?.(tier);
-
-  let effectiveWidth = width;
-  let effectiveHeight = height;
-  let effectiveFps = fps;
-  let effectiveBitrate = bitrate;
-
-  const effectiveTotalFrames = Math.max(1, Math.round(duration * effectiveFps));
-  const frameDurationUs = Math.round((1 / effectiveFps) * 1_000_000);
-
-  // 6. Initialize Pixi Caption Renderer (single-pass GPU compositing, no 2D canvas)
+  // 5. Initialize Pixi Caption Renderer (single-pass GPU compositing, no 2D canvas)
   const pixiRenderer = new PixiCaptionRenderer();
-  await pixiRenderer.init(effectiveWidth, effectiveHeight);
+  await pixiRenderer.init(width, height);
 
   const captionConfig = {
-    width: effectiveWidth,
-    height: effectiveHeight,
+    width,
+    height,
     words,
     theme,
     accentColor,
@@ -398,14 +324,14 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
     console.log("[ExportEngine] GPU video background mounted via PIXI.Texture.from(video)");
   }
 
-  // 7. Initialize MP4Muxer
+  // 6. Initialize MP4Muxer
   const muxerTarget = new ArrayBufferTarget();
   const muxer = new Muxer({
     target: muxerTarget,
     video: {
       codec: "avc",
-      width: effectiveWidth,
-      height: effectiveHeight,
+      width,
+      height,
     },
     audio: hasAudio
       ? {
@@ -418,7 +344,7 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
     firstTimestampBehavior: "offset",
   });
 
-  // 8. Setup AudioEncoder if audio is present
+  // 7. Setup AudioEncoder if audio is present
   let audioEncoder: AudioEncoder | null = null;
   if (hasAudio && "AudioEncoder" in window) {
     try {
@@ -452,7 +378,7 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
     }
   }
 
-  // 9. Setup VideoEncoder (configured immediately before loop to avoid inactivity reclamation)
+  // 8. Setup VideoEncoder
   let videoEncoderError: Error | null = null;
   const videoEncoder = new VideoEncoder({
     output: (chunk, meta) => {
@@ -464,92 +390,190 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
     },
   });
 
-  const effectiveVideoCodec = effectiveWidth !== width
-    ? await findSupportedH264Codec(effectiveWidth, effectiveHeight, effectiveFps, effectiveBitrate)
-    : videoCodec;
-
   videoEncoder.configure({
-    codec: effectiveVideoCodec,
-    width: effectiveWidth,
-    height: effectiveHeight,
-    bitrate: effectiveBitrate,
-    framerate: effectiveFps,
+    codec: videoCodec,
+    width,
+    height,
+    bitrate,
+    framerate: fps,
     hardwareAcceleration: "prefer-hardware",
     avc: { format: "avc" },
   });
 
   try {
     const startTime = performance.now();
+    const usePlaybackMode = exportMethod === "playback" && hasVideoSource && supportsRVFC(video);
 
-    // ── Deterministic Frame-Accurate Export Loop ─────────────────────────────
-    console.log(`[ExportEngine] Starting offline export loop (${effectiveTotalFrames} frames @ ${effectiveFps}fps, tier '${tier}', mode '${performanceMode}')`);
+    console.log(
+      `[ExportEngine] Starting export using ${usePlaybackMode ? "⚡ Fast Real-Time Playback (1x)" : "🎯 Frame-Accurate Seek"} mode (${totalFrames} frames @ ${fps}fps, ${width}x${height})`,
+    );
     onProgress?.({
       progress: 0.07,
       currentFrame: 0,
-      totalFrames: effectiveTotalFrames,
+      totalFrames,
       fps: 0,
-      stage: `Starting export loop (${effectiveTotalFrames} frames)…`,
+      stage: `Starting export loop (${totalFrames} frames)…`,
     });
 
-    for (let frameIdx = 0; frameIdx < effectiveTotalFrames; frameIdx++) {
-      if (signal?.aborted) throw new Error("Export cancelled.");
-      if (videoEncoderError) throw videoEncoderError;
+    if (usePlaybackMode) {
+      // ── ⚡ Real-Time Playback Capture Loop ──────────────────────────────────
+      await seekVideoToTime(video, 0);
+      video.playbackRate = 1.0;
 
-      const currentTime = frameIdx / effectiveFps;
+      let lastTimestampUs: number | null = null;
+      let capturedFrameIdx = 0;
 
-      // A. Advance video to exact timestamp and wait for GPU texture presentation
-      if (hasVideoSource && video.videoWidth > 0) {
-        await seekVideoToTime(video, currentTime);
+      try {
+        await video.play();
+      } catch (playErr) {
+        console.warn("[ExportEngine] video.play() failed for playback strategy:", playErr);
       }
 
-      // B. GPU texture refresh (zero CPU copy)
-      pixiRenderer.updateVideoFrame();
+      while (true) {
+        if (signal?.aborted) {
+          video.pause();
+          throw new Error("Export cancelled.");
+        }
+        if (videoEncoderError) {
+          video.pause();
+          throw videoEncoderError;
+        }
 
-      // C. Single-pass GPU composite: video sprite + captions
-      pixiRenderer.renderTime(currentTime, captionConfig);
+        const frameInfo = await waitForNextVideoFrame(video as RvfcCapableVideo);
+        if (!frameInfo) {
+          break;
+        }
 
-      // D. Capture GPU canvas into WebCodecs VideoFrame
-      const timestampUs = Math.round(currentTime * 1_000_000);
-      const videoFrame = new VideoFrame(pixiRenderer.canvas, {
-        timestamp: timestampUs,
-        duration: frameDurationUs,
-      });
+        const mediaTime = frameInfo.mediaTime;
+        if (mediaTime >= duration) {
+          break;
+        }
 
-      // E. Hardware H.264 encode
-      const isKeyframe = frameIdx % Math.round(effectiveFps * 2) === 0;
-      videoEncoder.encode(videoFrame, { keyFrame: isKeyframe });
-      videoFrame.close();
+        const currentTimestampUs = Math.round(mediaTime * 1_000_000);
+        const durationUs = lastTimestampUs !== null
+          ? Math.max(1, currentTimestampUs - lastTimestampUs)
+          : frameDurationUs;
+        lastTimestampUs = currentTimestampUs;
 
-      // F. Safe encoder backpressure management (pauses JS loop, not video element)
-      if (videoEncoder.encodeQueueSize > 12) {
-        while (videoEncoder.encodeQueueSize > 3) {
-          await new Promise<void>((r) => setTimeout(r, 10));
+        // GPU texture refresh (zero CPU copy)
+        pixiRenderer.updateVideoFrame();
+
+        // Single-pass GPU composite: video sprite + captions
+        pixiRenderer.renderTime(mediaTime, captionConfig);
+
+        // Capture GPU canvas into WebCodecs VideoFrame
+        const videoFrame = new VideoFrame(pixiRenderer.canvas, {
+          timestamp: currentTimestampUs,
+          duration: durationUs,
+        });
+
+        // Hardware H.264 encode
+        const isKeyframe = capturedFrameIdx % Math.round(fps * 2) === 0;
+        videoEncoder.encode(videoFrame, { keyFrame: isKeyframe });
+        videoFrame.close();
+
+        capturedFrameIdx++;
+
+        // Encoder backpressure management (pause video playback for backpressure)
+        if (videoEncoder.encodeQueueSize > 12) {
+          video.pause();
+          let waitLoops = 0;
+          while (videoEncoder.encodeQueueSize > 3 && waitLoops < 300) {
+            if (signal?.aborted) throw new Error("Export cancelled.");
+            if (videoEncoderError) throw videoEncoderError;
+            await new Promise<void>((r) => setTimeout(r, 10));
+            waitLoops++;
+          }
+          await video.play().catch(() => {});
+        }
+
+        // Throttled progress reporting
+        if (capturedFrameIdx % 5 === 0 || mediaTime >= duration - 0.05) {
+          const elapsedSec = (performance.now() - startTime) / 1000;
+          const currentRenderFps = elapsedSec > 0 ? capturedFrameIdx / elapsedSec : 0;
+          const progress = Math.min(1, mediaTime / duration);
+
+          const estimatedTotalSec = elapsedSec / Math.max(0.01, progress);
+          const remainingSec = Math.max(0, Math.round(estimatedTotalSec - elapsedSec));
+          const etaString = remainingSec > 60 ? `${Math.floor(remainingSec / 60)}m ${remainingSec % 60}s` : `${remainingSec}s`;
+
+          onProgress?.({
+            progress: Math.min(0.92, 0.05 + progress * 0.87),
+            currentFrame: capturedFrameIdx,
+            totalFrames,
+            fps: Math.round(currentRenderFps),
+            stage: `Encoding frames (${Math.round(progress * 100)}%) · ETA ${etaString}`,
+          });
         }
       }
 
-      // G. Throttled progress reporting (every 5 frames)
-      if (frameIdx % 5 === 0 || frameIdx === effectiveTotalFrames - 1) {
-        const elapsedSec = (performance.now() - startTime) / 1000;
-        const currentRenderFps = elapsedSec > 0 ? (frameIdx + 1) / elapsedSec : 0;
-        const progress = (frameIdx + 1) / effectiveTotalFrames;
+      video.pause();
+    } else {
+      // ── 🎯 Deterministic Frame-Accurate Seek Loop ────────────────────────────
+      for (let frameIdx = 0; frameIdx < totalFrames; frameIdx++) {
+        if (signal?.aborted) throw new Error("Export cancelled.");
+        if (videoEncoderError) throw videoEncoderError;
 
-        const estimatedTotalSec = elapsedSec / Math.max(0.01, progress);
-        const remainingSec = Math.max(0, Math.round(estimatedTotalSec - elapsedSec));
-        const etaString = remainingSec > 60 ? `${Math.floor(remainingSec / 60)}m ${remainingSec % 60}s` : `${remainingSec}s`;
+        const currentTime = frameIdx / fps;
 
-        onProgress?.({
-          progress: Math.min(0.92, 0.05 + progress * 0.87),
-          currentFrame: frameIdx + 1,
-          totalFrames: effectiveTotalFrames,
-          fps: Math.round(currentRenderFps),
-          stage: `Encoding frames (${Math.round(progress * 100)}%) · ETA ${etaString}`,
+        // A. Advance video to exact timestamp and wait for GPU texture presentation
+        if (hasVideoSource && video.videoWidth > 0) {
+          await seekVideoToTime(video, currentTime);
+        }
+
+        // B. GPU texture refresh (zero CPU copy)
+        pixiRenderer.updateVideoFrame();
+
+        // C. Single-pass GPU composite: video sprite + captions
+        pixiRenderer.renderTime(currentTime, captionConfig);
+
+        // D. Capture GPU canvas into WebCodecs VideoFrame
+        const timestampUs = Math.round(currentTime * 1_000_000);
+        const videoFrame = new VideoFrame(pixiRenderer.canvas, {
+          timestamp: timestampUs,
+          duration: frameDurationUs,
         });
+
+        // E. Hardware H.264 encode
+        const isKeyframe = frameIdx % Math.round(fps * 2) === 0;
+        videoEncoder.encode(videoFrame, { keyFrame: isKeyframe });
+        videoFrame.close();
+
+        // F. Safe encoder backpressure management (pauses JS loop, not video element)
+        if (videoEncoder.encodeQueueSize > 12) {
+          let waitLoops = 0;
+          while (videoEncoder.encodeQueueSize > 3 && waitLoops < 300) {
+            if (signal?.aborted) throw new Error("Export cancelled.");
+            if (videoEncoderError) throw videoEncoderError;
+            await new Promise<void>((r) => setTimeout(r, 10));
+            waitLoops++;
+          }
+        }
+
+        // G. Throttled progress reporting (every 5 frames)
+        if (frameIdx % 5 === 0 || frameIdx === totalFrames - 1) {
+          const elapsedSec = (performance.now() - startTime) / 1000;
+          const currentRenderFps = elapsedSec > 0 ? (frameIdx + 1) / elapsedSec : 0;
+          const progress = (frameIdx + 1) / totalFrames;
+
+          const estimatedTotalSec = elapsedSec / Math.max(0.01, progress);
+          const remainingSec = Math.max(0, Math.round(estimatedTotalSec - elapsedSec));
+          const etaString = remainingSec > 60 ? `${Math.floor(remainingSec / 60)}m ${remainingSec % 60}s` : `${remainingSec}s`;
+
+          onProgress?.({
+            progress: Math.min(0.92, 0.05 + progress * 0.87),
+            currentFrame: frameIdx + 1,
+            totalFrames,
+            fps: Math.round(currentRenderFps),
+            stage: `Encoding frames (${Math.round(progress * 100)}%) · ETA ${etaString}`,
+          });
+        }
       }
     }
 
-    // 10. Encode Audio Track
+    // 9. Encode Audio Track
     if (audioEncoder && audioBuffer) {
-      onProgress?.({ progress: 0.94, currentFrame: effectiveTotalFrames, totalFrames: effectiveTotalFrames, fps, stage: "Encoding audio track…" });
+      onProgress?.({ progress: 0.94, currentFrame: totalFrames, totalFrames, fps, stage: "Encoding audio track…" });
       try {
         const channelDataList: Float32Array[] = [];
         for (let ch = 0; ch < audioChannels; ch++) {
@@ -595,8 +619,8 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
       }
     }
 
-    // 11. Finalize
-    onProgress?.({ progress: 0.97, currentFrame: effectiveTotalFrames, totalFrames: effectiveTotalFrames, fps, stage: "Finalizing MP4 container…" });
+    // 10. Finalize
+    onProgress?.({ progress: 0.97, currentFrame: totalFrames, totalFrames, fps, stage: "Finalizing MP4 container…" });
 
     await videoEncoder.flush();
     videoEncoder.close();
@@ -605,9 +629,9 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
 
     const finalBlob = new Blob([muxerTarget.buffer], { type: "video/mp4" });
     console.timeEnd("[ExportEngine] Total export time");
-    console.log(`[ExportEngine] Export complete! Generated MP4: ${(finalBlob.size / 1024 / 1024).toFixed(2)} MB | Tier: ${tier} | Mode: ${performanceMode}`);
+    console.log(`[ExportEngine] Export complete! Generated MP4: ${(finalBlob.size / 1024 / 1024).toFixed(2)} MB`);
 
-    onProgress?.({ progress: 1.0, currentFrame: effectiveTotalFrames, totalFrames: effectiveTotalFrames, fps, stage: "Export complete!" });
+    onProgress?.({ progress: 1.0, currentFrame: totalFrames, totalFrames, fps, stage: "Export complete!" });
 
     return finalBlob;
   } finally {
@@ -617,3 +641,4 @@ export async function exportVideoWithWebCodecs(options: ExportOptions): Promise<
     }
   }
 }
+
