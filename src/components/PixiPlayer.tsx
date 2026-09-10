@@ -26,6 +26,10 @@ export interface PixiPlayerRef {
   seekTo: (timeSeconds: number) => void;
   getCurrentTime: () => number;
   isPlaying: () => boolean;
+  /** Stop the preview RAF loop during export to free GPU for the export renderer. */
+  freezeRenderer: () => void;
+  /** Restore the preview RAF loop after export completes. */
+  unfreezeRenderer: () => void;
 }
 
 export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function PixiPlayer(
@@ -87,6 +91,19 @@ export const PixiPlayer = forwardRef<PixiPlayerRef, PixiPlayerProps>(function Pi
     },
     getCurrentTime: () => videoRef.current?.currentTime || currentTime,
     isPlaying: () => isPlayingState,
+    freezeRenderer: () => {
+      // Cancel the preview RAF loop so it stops consuming GPU during export
+      if (animFrameIdRef.current !== null) {
+        cancelAnimationFrame(animFrameIdRef.current);
+        animFrameIdRef.current = null;
+      }
+    },
+    unfreezeRenderer: () => {
+      // Restart the preview RAF loop after export if video is playing
+      if (!videoRef.current?.paused && animFrameIdRef.current === null) {
+        animFrameIdRef.current = requestAnimationFrame(tick);
+      }
+    },
   }));
 
   // Initialize Pixi Caption Renderer

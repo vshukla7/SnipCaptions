@@ -562,17 +562,9 @@ export class PixiCaptionRenderer {
         if (this.app.ticker) {
           this.app.ticker.stop();
         }
-        // Force browser to release WebGL context extension slot if not already lost
-        try {
-          const gl = (this.app.renderer as { gl?: WebGLRenderingContext })?.gl;
-          if (gl && !gl.isContextLost()) {
-            const loseContext = gl.getExtension?.("WEBGL_lose_context");
-            if (loseContext) {
-              loseContext.loseContext();
-            }
-          }
-        } catch {}
-
+        // NOTE: Do NOT call loseContext() here — the WebGL context slot may be
+        // shared with or reused by other renderers (e.g. the live PixiPlayer).
+        // Deliberately losing it would crash every other WebGL canvas on the page.
         this.app.destroy(false, { children: true });
         this.app = null;
       }
